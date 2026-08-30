@@ -30,12 +30,12 @@ describe('P0-1: only a real JFIF identifier reaches the retained JFIF path', () 
     expect(readSegments(outcome.output!).map((s) => classify(s).name)).toContain('APP0/JFIF');
   });
 
-  it('J2: a valid JFIF thumbnail survives byte for byte', async () => {
+  it('J2: a valid JFIF keeps its header while its thumbnail is disclosed and removed', async () => {
     const outcome = await run('a_jfif_thumb.jpg');
-    const app0 = (bytes: Uint8Array) => readSegments(bytes)
-      .filter((s) => classify(s).name === 'APP0/JFIF')
-      .map((s) => Array.from(s.payload!));
-    expect(app0(outcome.output!)).toEqual(app0(fixture('a_jfif_thumb.jpg')));
+    const app0 = (bytes: Uint8Array) => readSegments(bytes).find((s) => classify(s).name === 'APP0/JFIF')!.payload!;
+    expect(Array.from(app0(outcome.output!).subarray(0, 12)))
+      .toEqual(Array.from(app0(fixture('a_jfif_thumb.jpg')).subarray(0, 12)));
+    expect(outcome.findings).toContain('OTHER/Embedded thumbnail image');
     expect(outcome.verdict).toBe('verified');
   });
 

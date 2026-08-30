@@ -47,16 +47,22 @@ describe('P0-A: payload inside retained JPEG APP structures', () => {
     expect(contains(outcome.output, CANARY.app14)).toBe(false);
   });
 
-  it('a legal JFIF, including its thumbnail, survives byte for byte', async () => {
-    for (const file of ['a_jfif_thumb.jpg', 'a_app14_ok.jpg']) {
-      const outcome = await run(file);
-      expect(outcome.verdict, file).toBe('verified');
-      const kept = (bytes: Uint8Array, name: string) => readSegments(bytes)
-        .filter((s) => classify(s).name === name)
-        .map((s) => Array.from(s.payload ?? []));
-      const name = file.startsWith('a_jfif') ? 'APP0/JFIF' : 'APP14/Adobe';
-      expect(kept(outcome.output!, name), file).toEqual(kept(fixture(file), name));
-    }
+  it('the legal JFIF header survives, and its thumbnail is disclosed and removed', async () => {
+    // Superseded policy: the thumbnail used to be retained silently. It is a second picture,
+    // so it is now reported and dropped while the JFIF segment itself stays valid.
+    const outcome = await run('a_jfif_thumb.jpg');
+    expect(outcome.verdict).toBe('verified');
+    expect(outcome.findings).toContain('OTHER/Embedded thumbnail image');
+    const app0 = (bytes: Uint8Array) => readSegments(bytes).find((s) => classify(s).name === 'APP0/JFIF')!.payload!;
+    expect(Array.from(app0(outcome.output!).subarray(0, 12)))
+      .toEqual(Array.from(app0(fixture('a_jfif_thumb.jpg')).subarray(0, 12)));
+    expect(Array.from(app0(outcome.output!).subarray(12))).toEqual([0, 0]);
+
+    const adobe = await run('a_app14_ok.jpg');
+    const kept = (bytes: Uint8Array) => readSegments(bytes)
+      .filter((s) => classify(s).name === 'APP14/Adobe')
+      .map((s) => Array.from(s.payload ?? []));
+    expect(kept(adobe.output!)).toEqual(kept(fixture('a_app14_ok.jpg')));
   });
 
   it('a JFIF whose declared thumbnail is missing, or whose header is truncated, fails closed', async () => {
@@ -234,7 +240,10 @@ describe('final self-attack: combinations', () => {
     const jfifOf = (bytes: Uint8Array) => readSegments(bytes).find((s) => classify(s).name === 'APP0/JFIF')!.payload!;
     const after = jfifOf(outcome.output!);
     const before = jfifOf(fixture('a_jfif_thumb.jpg'));
-    expect(Array.from(after), 'the legal JFIF, thumbnail included, must be intact').toEqual(Array.from(before));
+    // the JFIF header is intact; the thumbnail and the appended payload are both gone
+    expect(Array.from(after.subarray(0, 12))).toEqual(Array.from(before.subarray(0, 12)));
+    expect(Array.from(after.subarray(12))).toEqual([0, 0]);
+    expect(outcome.findings).toContain('OTHER/Embedded thumbnail image');
     expect(outcome.verdict).toBe('verified');
   });
 });

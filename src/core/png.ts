@@ -213,10 +213,44 @@ function assertRetainedChunkShapes(chunks: Chunk[]): void {
   }
 }
 
-/** PNG allows at most one embedded profile; more than one is a shape FilePass will not guess at. */
-function assertOneProfile(chunks: Chunk[]): void {
-  if (chunks.filter((chunk) => chunk.type === 'iCCP').length > 1) {
-    throw new MalformedFileError('This image carries more than one colour profile, which FilePass cannot account for.');
+/**
+ * How often each retained chunk may appear. Being the right shape is not the same as being
+ * allowed to be there: a second copy of a chunk the format permits once is a place to hide
+ * bytes that every per-chunk check would wave through. Refusal is the answer rather than
+ * dropping one of them, because nothing in the file says which copy is the real one.
+ */
+const CHUNK_CARDINALITY: Record<string, 'once' | 'repeatable'> = {
+  IHDR: 'once', PLTE: 'once', IEND: 'once', tRNS: 'once', gAMA: 'once', cHRM: 'once',
+  sRGB: 'once', iCCP: 'once', sBIT: 'once', bKGD: 'once', hIST: 'once', pHYs: 'once',
+  acTL: 'once', cICP: 'once', mDCv: 'once', cLLi: 'once',
+  IDAT: 'repeatable', fdAT: 'repeatable', fcTL: 'repeatable', sPLT: 'repeatable',
+};
+
+function assertChunkCardinality(chunks: Chunk[]): void {
+  const counts = new Map<string, number>();
+  for (const chunk of chunks) {
+    if (!RENDERING_CHUNKS.has(chunk.type)) continue;
+    counts.set(chunk.type, (counts.get(chunk.type) ?? 0) + 1);
+  }
+
+  for (const [type, count] of counts) {
+    const rule = CHUNK_CARDINALITY[type];
+    if (rule === undefined) {
+      // Retained without a stated cardinality: refuse rather than assume repetition is fine.
+      throw new MalformedFileError(`FilePass cannot say how often a ${type} block may appear in this image, so it will not vouch for it.`);
+    }
+    if (rule === 'once' && count > 1) {
+      throw new MalformedFileError(`This image carries ${count} ${type} blocks where the format allows one, so FilePass cannot tell which is real.`);
+    }
+  }
+
+  // Repeatable palettes are told apart by their names, so duplicated names are ambiguous too.
+  const names = chunks.filter((chunk) => chunk.type === 'sPLT').map((chunk) => {
+    const nul = chunk.data.indexOf(0);
+    return utf8(chunk.data.subarray(0, nul < 0 ? chunk.data.length : nul));
+  });
+  if (new Set(names).size !== names.length) {
+    throw new MalformedFileError('This image carries suggested palettes that share a name, so FilePass cannot tell them apart.');
   }
 }
 
@@ -287,7 +321,7 @@ function readProfileChunk(chunk: Chunk): { name: string; rest: Uint8Array } {
 
 export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
   const chunks = readChunks(bytes);
-  assertOneProfile(chunks);
+  assertChunkCardinality(chunks);
   assertRetainedChunkShapes(chunks);
   const findings: Finding[] = [];
   const notes: string[] = [];
@@ -393,7 +427,7 @@ function readTime(data: Uint8Array): string {
 
 export async function clean(bytes: Uint8Array, report: InspectionReport): Promise<CleanResult> {
   const chunks = readChunks(bytes);
-  assertOneProfile(chunks);
+  assertChunkCardinality(chunks);
   assertRetainedChunkShapes(chunks);
   const parts: Uint8Array[] = [bytes.subarray(0, 8)];
   const removedContainers = new Set<string>();

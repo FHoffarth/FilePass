@@ -115,6 +115,49 @@ function paddingOf(marker: number, payload: Uint8Array): number | undefined {
   return expected < payload.length ? payload.length - expected : undefined;
 }
 
+/**
+ * Retained segments a JPEG may only carry once. A second one is individually well formed and
+ * still wrong, and nothing in the file says which of them the decoder is meant to believe.
+ */
+const SEGMENT_CARDINALITY: Record<string, 'once'> = {
+  'APP0/JFIF': 'once',
+  'APP14/Adobe': 'once',
+};
+
+function assertSegmentCardinality(segments: Segment[]): void {
+  const counts = new Map<string, number>();
+  for (const segment of segments) {
+    const { name } = classify(segment);
+    if (SEGMENT_CARDINALITY[name] === undefined) continue;
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  for (const [name, count] of counts) {
+    if (count > 1) {
+      throw new MalformedFileError(`This image carries ${count} ${name} blocks where the format allows one, so FilePass cannot tell which is real.`);
+    }
+  }
+}
+
+/** The optional RGB thumbnail a JFIF segment can carry: a second picture inside the picture. */
+function jfifThumbnail(segment: Segment): { width: number; height: number; bytes: number } | undefined {
+  if (classify(segment).name !== 'APP0/JFIF') return undefined;
+  const payload = segment.payload!;
+  const width = payload[12];
+  const height = payload[13];
+  if (width === 0 || height === 0) return undefined;
+  return { width, height, bytes: 3 * width * height };
+}
+
+/** Writes the JFIF segment back with its thumbnail declared away and its pixels dropped. */
+function rebuildJfifWithoutThumbnail(segment: Segment): Uint8Array {
+  const kept = concat([segment.payload!.subarray(0, 12), Uint8Array.of(0, 0)]);
+  const header = new Uint8Array(4);
+  header[0] = 0xff;
+  header[1] = segment.marker;
+  new DataView(header.buffer).setUint16(2, kept.length + 2);
+  return concat([header, kept]);
+}
+
 /** Walks every marker segment. Nothing in a JPEG can be invisible to FilePass, only undecoded. */
 export function readSegments(bytes: Uint8Array): Segment[] {
   if (bytes[0] !== 0xff || bytes[1] !== 0xd8) throw new MalformedFileError('This does not look like a JPEG file.');
@@ -246,6 +289,7 @@ function trailingBytesToDrop(segment: Segment, icc: IccProfile | undefined): num
 
 export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
   const segments = readSegments(bytes);
+  assertSegmentCardinality(segments);
   const findings: Finding[] = [];
   const notes: string[] = [];
 
@@ -306,6 +350,20 @@ export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
         ? `${size} bytes of embedded XMP, which often names the author or the editing tool`
         : `${size} bytes FilePass can remove but cannot read`,
       container: container.name,
+      key: `offset:${segment.start}`,
+      removable: true,
+    });
+  }
+
+  for (const segment of segments) {
+    const thumbnail = jfifThumbnail(segment);
+    if (!thumbnail) continue;
+    findings.push({
+      id: `JFIFThumbnail#offset:${segment.start}`,
+      category: 'OTHER',
+      label: 'Embedded thumbnail image',
+      value: `A separate ${thumbnail.width} by ${thumbnail.height} picture of ${thumbnail.bytes} bytes stored inside this image`,
+      container: 'JFIFThumbnail',
       key: `offset:${segment.start}`,
       removable: true,
     });
@@ -373,6 +431,7 @@ function orientationSegment(orientation: number): Uint8Array {
 
 export async function clean(bytes: Uint8Array, report: InspectionReport): Promise<CleanResult> {
   const segments = readSegments(bytes);
+  assertSegmentCardinality(segments);
   const parts: Uint8Array[] = [new Uint8Array([0xff, 0xd8])];
   const removedContainers = new Set<string>();
   const notes: string[] = [];
@@ -389,7 +448,13 @@ export async function clean(bytes: Uint8Array, report: InspectionReport): Promis
       continue;
     }
     const drop = trailingBytesToDrop(segment, icc);
-    if (drop > 0) {
+    if (jfifThumbnail(segment)) {
+      // The thumbnail is a whole separate picture; dropping it leaves a valid JFIF segment
+      // and never touches the image the file is actually of.
+      parts.push(rebuildJfifWithoutThumbnail(segment));
+      removedContainers.add('JFIFThumbnail');
+      if (drop > 0) removedContainers.add('PADDING');
+    } else if (drop > 0) {
       parts.push(rebuildWithoutPadding(bytes, segment, drop));
       removedContainers.add('PADDING');
     } else {
