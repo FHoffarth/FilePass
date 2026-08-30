@@ -1,0 +1,180 @@
+import { decodeTags } from './decode';
+import { Category, CleanResult, Finding, InspectionReport, MalformedFileError } from './types';
+import { concat } from './jpeg';
+
+const SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
+
+export interface Chunk {
+  type: string;
+  start: number;
+  end: number;
+  data: Uint8Array;
+}
+
+/**
+ * Chunks that carry rendering or animation information. Removing these damages the picture,
+ * so FilePass keeps them and says so. Everything not on this list is metadata and is removed.
+ */
+const RENDERING_CHUNKS = new Set([
+  'IHDR', 'PLTE', 'IDAT', 'IEND', 'tRNS', 'gAMA', 'cHRM', 'sRGB', 'iCCP', 'sBIT',
+  'bKGD', 'hIST', 'pHYs', 'sPLT', 'acTL', 'fcTL', 'fdAT', 'cICP', 'mDCv', 'cLLi',
+]);
+
+export function readChunks(bytes: Uint8Array): Chunk[] {
+  if (!SIGNATURE.every((b, i) => bytes[i] === b)) throw new MalformedFileError('This does not look like a PNG file.');
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const chunks: Chunk[] = [];
+  let i = 8;
+  while (i + 8 <= bytes.length) {
+    const length = view.getUint32(i);
+    const type = Array.from(bytes.subarray(i + 4, i + 8), (c) => String.fromCharCode(c)).join('');
+    if (!/^[A-Za-z]{4}$/.test(type)) throw new MalformedFileError('This PNG file is damaged and cannot be read safely.');
+    if (i + 12 + length > bytes.length) throw new MalformedFileError('This PNG file ends unexpectedly.');
+    chunks.push({ type, start: i, end: i + 12 + length, data: bytes.subarray(i + 8, i + 8 + length) });
+    i += 12 + length;
+    if (type === 'IEND') break;
+  }
+  if (!chunks.some((c) => c.type === 'IHDR')) throw new MalformedFileError('This PNG file is missing its header.');
+  return chunks;
+}
+
+const KEYWORD_MAP: Record<string, { label: string; category: Category }> = {
+  author: { label: 'Author', category: 'IDENTITY' },
+  'creation time': { label: 'Created', category: 'TIME' },
+  'modification time': { label: 'Modified', category: 'TIME' },
+  software: { label: 'Software', category: 'DEVICE' },
+  source: { label: 'Source device', category: 'DEVICE' },
+  title: { label: 'Title', category: 'DOCUMENT' },
+  description: { label: 'Description', category: 'DOCUMENT' },
+  comment: { label: 'Comment', category: 'DOCUMENT' },
+  copyright: { label: 'Copyright', category: 'IDENTITY' },
+  disclaimer: { label: 'Disclaimer', category: 'DOCUMENT' },
+  warning: { label: 'Warning', category: 'DOCUMENT' },
+};
+
+const utf8 = (b: Uint8Array) => new TextDecoder('utf-8', { fatal: false }).decode(b);
+
+async function inflate(data: Uint8Array): Promise<Uint8Array | undefined> {
+  if (typeof DecompressionStream === 'undefined') return undefined;
+  try {
+    const stream = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  } catch {
+    return undefined;
+  }
+}
+
+/** Reads keyword and text out of a tEXt / zTXt / iTXt chunk. Values may be untrusted text. */
+async function readTextChunk(chunk: Chunk): Promise<{ keyword: string; text: string }> {
+  const nul = chunk.data.indexOf(0);
+  const keyword = utf8(chunk.data.subarray(0, nul < 0 ? chunk.data.length : nul));
+  const rest = chunk.data.subarray(nul + 1);
+  if (chunk.type === 'tEXt') return { keyword, text: utf8(rest) };
+  if (chunk.type === 'zTXt') {
+    const inflated = await inflate(rest.subarray(1));
+    return { keyword, text: inflated ? utf8(inflated) : 'compressed text FilePass can remove but did not decode' };
+  }
+  // iTXt: compression flag, compression method, language tag, translated keyword, then text.
+  const compressed = rest[0] === 1;
+  let cursor = 2;
+  for (let seen = 0; seen < 2 && cursor < rest.length; cursor++) if (rest[cursor] === 0) seen++;
+  const body = rest.subarray(cursor);
+  if (!compressed) return { keyword, text: utf8(body) };
+  const inflated = await inflate(body);
+  return { keyword, text: inflated ? utf8(inflated) : 'compressed text FilePass can remove but did not decode' };
+}
+
+const clip = (s: string) => (s.length > 160 ? `${s.slice(0, 157)}...` : s);
+
+export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
+  const chunks = readChunks(bytes);
+  const findings: Finding[] = [];
+  const notes: string[] = [];
+
+  for (const chunk of chunks) {
+    if (RENDERING_CHUNKS.has(chunk.type)) continue;
+    const id = `${chunk.type}#offset:${chunk.start}`;
+
+    if (chunk.type === 'tEXt' || chunk.type === 'zTXt' || chunk.type === 'iTXt') {
+      const { keyword, text } = await readTextChunk(chunk);
+      const known = KEYWORD_MAP[keyword.trim().toLowerCase()];
+      const isXmp = keyword === 'XML:com.adobe.xmp';
+      findings.push({
+        id,
+        category: isXmp ? 'OTHER' : known?.category ?? 'OTHER',
+        label: isXmp ? 'XMP metadata block' : known?.label ?? `Text entry "${clip(keyword)}"`,
+        value: isXmp ? `${chunk.data.length} bytes of embedded XMP, which often names the author or the editing tool` : clip(text.trim()),
+        container: chunk.type,
+        key: `${chunk.type}:${keyword}`,
+        removable: true,
+      });
+      continue;
+    }
+
+    if (chunk.type === 'eXIf') {
+      const tags = await decodeTags(bytes);
+      if (tags.length === 0) {
+        findings.push({
+          id, category: 'OTHER', label: 'Embedded camera data',
+          value: `${chunk.data.length} bytes FilePass can remove but did not decode`,
+          container: 'eXIf', key: 'eXIf', removable: true,
+        });
+      }
+      for (const tag of tags) {
+        findings.push({
+          id: `eXIf#${tag.key}`,
+          category: tag.category, label: tag.label, value: tag.value,
+          container: 'eXIf', key: tag.key, removable: true,
+        });
+      }
+      continue;
+    }
+
+    if (chunk.type === 'tIME') {
+      findings.push({
+        id, category: 'TIME', label: 'Modified', value: readTime(chunk.data),
+        container: 'tIME', key: 'tIME', removable: true,
+      });
+      continue;
+    }
+
+    findings.push({
+      id, category: 'OTHER', label: `${chunk.type} data block`,
+      value: `${chunk.data.length} bytes FilePass can remove but cannot read`,
+      container: chunk.type, key: chunk.type, removable: true,
+    });
+  }
+
+  if (chunks.some((c) => c.type === 'tRNS') || chunks.some((c) => c.type === 'iCCP')) {
+    notes.push('Transparency and colour information are kept so the picture still looks the same.');
+  }
+
+  return { format: 'png', byteLength: bytes.length, findings, notes };
+}
+
+function readTime(data: Uint8Array): string {
+  if (data.length < 7) return `${data.length} bytes`;
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${view.getUint16(0)}-${pad(data[2])}-${pad(data[3])} ${pad(data[4])}:${pad(data[5])}:${pad(data[6])}`;
+}
+
+export async function clean(bytes: Uint8Array, report: InspectionReport): Promise<CleanResult> {
+  const chunks = readChunks(bytes);
+  const parts: Uint8Array[] = [bytes.subarray(0, 8)];
+  const removedContainers = new Set<string>();
+
+  for (const chunk of chunks) {
+    if (RENDERING_CHUNKS.has(chunk.type)) {
+      parts.push(bytes.subarray(chunk.start, chunk.end));
+      continue;
+    }
+    removedContainers.add(chunk.type);
+  }
+
+  const promisedRemovedIds = report.findings
+    .filter((f) => f.removable && removedContainers.has(f.container))
+    .map((f) => f.id);
+
+  return { bytes: concat(parts), promisedRemovedIds, notes: [] };
+}
