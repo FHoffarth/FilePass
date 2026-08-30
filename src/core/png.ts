@@ -86,12 +86,76 @@ async function readTextChunk(chunk: Chunk): Promise<{ keyword: string; text: str
 
 const clip = (s: string) => (s.length > 160 ? `${s.slice(0, 157)}...` : s);
 
+/** The label FilePass writes in place of whatever text a profile was carrying. */
+const PROFILE_LABEL = 'ICC profile';
+
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes: Uint8Array): number {
+  let c = 0xffffffff;
+  for (const byte of bytes) c = CRC_TABLE[(c ^ byte) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function buildChunk(type: string, data: Uint8Array): Uint8Array {
+  const body = concat([Uint8Array.from(type, (ch) => ch.charCodeAt(0)), data]);
+  const out = new Uint8Array(8 + data.length + 4);
+  const view = new DataView(out.buffer);
+  view.setUint32(0, data.length);
+  out.set(body, 4);
+  view.setUint32(8 + data.length, crc32(body));
+  return out;
+}
+
+/** Splits an iCCP chunk into its free text label and the profile bytes themselves. */
+function readProfileChunk(chunk: Chunk): { name: string; rest: Uint8Array } {
+  const nul = chunk.data.indexOf(0);
+  const cut = nul < 0 ? chunk.data.length : nul;
+  return { name: utf8(chunk.data.subarray(0, cut)).trim(), rest: chunk.data.subarray(cut + 1) };
+}
+
 export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
   const chunks = readChunks(bytes);
   const findings: Finding[] = [];
   const notes: string[] = [];
 
   for (const chunk of chunks) {
+    if (chunk.type === 'iCCP') {
+      // The colour profile itself has to stay, and FilePass says so rather than letting it
+      // ride along undisclosed. Its name is free text with no effect on rendering, so that
+      // part is replaced with a plain label.
+      const { name } = readProfileChunk(chunk);
+      if (name && name !== PROFILE_LABEL) {
+        findings.push({
+          id: 'iCCP#name',
+          category: 'OTHER',
+          label: 'Colour profile name',
+          value: clip(name),
+          container: 'iCCP',
+          key: 'iCCP:name',
+          removable: true,
+        });
+      }
+      findings.push({
+        id: 'iCCP#profile',
+        category: 'OTHER',
+        label: 'Colour profile',
+        value: `${chunk.data.length} bytes of colour information`,
+        container: 'iCCP-profile',
+        key: 'iCCP',
+        removable: false,
+        keptReason: 'Needed to display the image with the right colours',
+      });
+      continue;
+    }
     if (RENDERING_CHUNKS.has(chunk.type)) continue;
     const id = `${chunk.type}#offset:${chunk.start}`;
 
@@ -165,6 +229,17 @@ export async function clean(bytes: Uint8Array, report: InspectionReport): Promis
   const removedContainers = new Set<string>();
 
   for (const chunk of chunks) {
+    if (chunk.type === 'iCCP') {
+      const { name, rest } = readProfileChunk(chunk);
+      if (name && name !== PROFILE_LABEL) {
+        const label = Uint8Array.from(PROFILE_LABEL, (ch) => ch.charCodeAt(0));
+        parts.push(buildChunk('iCCP', concat([label, Uint8Array.of(0), rest])));
+        removedContainers.add('iCCP');
+      } else {
+        parts.push(bytes.subarray(chunk.start, chunk.end));
+      }
+      continue;
+    }
     if (RENDERING_CHUNKS.has(chunk.type)) {
       parts.push(bytes.subarray(chunk.start, chunk.end));
       continue;

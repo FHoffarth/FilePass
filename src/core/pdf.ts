@@ -145,6 +145,18 @@ async function inspectDocument(bytes: Uint8Array): Promise<InspectionReport> {
     });
   }
 
+  if (doc.catalog.get(PDFName.of('PieceInfo'))) {
+    findings.push({
+      id: 'PieceInfo#catalog',
+      category: 'OTHER',
+      label: 'Editing data on the document',
+      value: 'Private data left behind by the program that made this file',
+      container: 'PieceInfo',
+      key: 'catalog',
+      removable: true,
+    });
+  }
+
   doc.getPages().forEach((page, index) => {
     if (page.node.get(PDFName.of('Metadata'))) {
       findings.push({
@@ -177,6 +189,18 @@ async function inspectDocument(bytes: Uint8Array): Promise<InspectionReport> {
         removable: true,
       });
     }
+  }
+  for (const { page, index, dict } of annotationDicts(doc)) {
+    if (!dict.get(PDFName.of('Metadata'))) continue;
+    findings.push({
+      id: `AnnotXMP#${page}:${index}`,
+      category: 'OTHER',
+      label: `XMP metadata on a comment (page ${page + 1})`,
+      value: 'Extra metadata attached to a comment, which often names its author or tool',
+      container: 'AnnotXMP',
+      key: `${page}:${index}`,
+      removable: true,
+    });
   }
   if (annotationDicts(doc).length > 0) {
     notes.push('Comment text stays in the document. Only the name and dates attached to comments are removed.');
@@ -227,6 +251,11 @@ export async function clean(bytes: Uint8Array, report: InspectionReport): Promis
     removedContainers.add('XMP');
   }
 
+  if (doc.catalog.get(PDFName.of('PieceInfo'))) {
+    doc.catalog.delete(PDFName.of('PieceInfo'));
+    removedContainers.add('PieceInfo');
+  }
+
   for (const page of doc.getPages()) {
     if (page.node.get(PDFName.of('Metadata'))) { page.node.delete(PDFName.of('Metadata')); removedContainers.add('PageXMP'); }
     if (page.node.get(PDFName.of('PieceInfo'))) { page.node.delete(PDFName.of('PieceInfo')); removedContainers.add('PieceInfo'); }
@@ -236,6 +265,7 @@ export async function clean(bytes: Uint8Array, report: InspectionReport): Promis
     for (const name of Object.keys(ANNOT_KEYS)) {
       if (dict.get(PDFName.of(name))) { dict.delete(PDFName.of(name)); removedContainers.add('Annots'); }
     }
+    if (dict.get(PDFName.of('Metadata'))) { dict.delete(PDFName.of('Metadata')); removedContainers.add('AnnotXMP'); }
   }
 
   // Removing a reference does not remove the bytes: pdf-lib writes back every object it

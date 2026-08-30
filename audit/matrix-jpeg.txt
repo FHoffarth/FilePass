@@ -3,7 +3,7 @@ clean.jpg | jpeg | 0 | verified | YES |
 j_orient1.jpg | jpeg | 7 | verified | YES | 
 j_orient6.jpg | jpeg | 7 | verified | YES | 
 j_orient8.jpg | jpeg | 7 | verified | YES | 
-j_icc.jpg | jpeg | 7 | verified | YES | 
+j_icc.jpg | jpeg | 8 | verified | YES | 
 j_cmyk.jpg | jpeg | 7 | verified | YES | 
 j_unicode.jpg | jpeg | 7 | verified | YES | 
 j_script.jpg | jpeg | 8 | verified | YES | 

@@ -9,9 +9,69 @@ interface Segment {
   isScan?: boolean;
   /** Bytes that follow the end-of-image marker. Not part of the picture. */
   isTrailing?: boolean;
+  /** Offset of the first payload byte, so a segment can be rebuilt without its padding. */
+  payloadStart?: number;
+  /** Bytes inside the segment that sit past the structure the format defines. */
+  padding?: number;
 }
 
 const latin1 = (b: Uint8Array) => Array.from(b, (c) => String.fromCharCode(c)).join('');
+
+/**
+ * How long a structural segment's payload has to be, given what the format says is in it.
+ * Returns null for segments whose length FilePass does not model. A declared payload that
+ * is longer than this carries bytes no decoder will ever read.
+ */
+function structuralPayloadLength(marker: number, payload: Uint8Array): number | null {
+  const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+
+  // Inside a segment FilePass does model, a structure it cannot follow is ambiguous, and
+  // ambiguity fails closed: there is no way to tell a stray table from a hidden payload.
+  const ambiguous = () => {
+    throw new MalformedFileError('This JPEG file is damaged and cannot be read safely.');
+  };
+
+  if (marker === 0xdb) {                                   // quantisation tables
+    let i = 0;
+    while (i < payload.length) {
+      const precision = payload[i] >> 4;
+      if (precision > 1) ambiguous();                      // Pq must be 0 or 1
+      i += 1 + (precision === 0 ? 64 : 128);
+      if (i > payload.length) ambiguous();
+    }
+    return i;
+  }
+
+  if (marker === 0xc4) {                                   // huffman tables
+    let i = 0;
+    while (i < payload.length) {
+      if (i + 17 > payload.length) ambiguous();
+      let symbols = 0;
+      for (let k = 1; k <= 16; k++) symbols += payload[i + k];
+      i += 17 + symbols;
+      if (i > payload.length) ambiguous();
+    }
+    return i;
+  }
+
+  const isFrameHeader = marker >= 0xc0 && marker <= 0xcf
+    && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+  if (isFrameHeader) {
+    if (payload.length < 6) ambiguous();
+    const components = payload[5];
+    return 6 + components * 3;
+  }
+
+  if (marker === 0xda) {                                   // start of scan header
+    if (payload.length < 1) ambiguous();
+    const components = payload[0];
+    return 1 + components * 2 + 3;
+  }
+
+  if (marker === 0xdd) return 2;                           // restart interval
+  if (marker === 0xdc) return view.byteLength >= 2 ? 2 : null;  // define number of lines
+  return null;
+}
 
 /**
  * Walks the entropy coded scan: stuffed FF00 pairs, fill bytes and restart markers all
@@ -30,6 +90,16 @@ function endOfScan(bytes: Uint8Array, from: number): number {
     return i;                                                  // a real marker starts here
   }
   throw new MalformedFileError('This JPEG file ends before the end of the image.');
+}
+
+/** Extra bytes a structural segment declares but the format does not account for. */
+function paddingOf(marker: number, payload: Uint8Array): number | undefined {
+  const expected = structuralPayloadLength(marker, payload);
+  if (expected === null) return undefined;
+  if (expected > payload.length) {
+    throw new MalformedFileError('This JPEG file is damaged and cannot be read safely.');
+  }
+  return expected < payload.length ? payload.length - expected : undefined;
 }
 
 /** Walks every marker segment. Nothing in a JPEG can be invisible to FilePass, only undecoded. */
@@ -54,7 +124,11 @@ export function readSegments(bytes: Uint8Array): Segment[] {
       const headerEnd = j + 1 + headerLength;
       if (headerLength < 2 || headerEnd > bytes.length) throw new MalformedFileError('This JPEG file is damaged and cannot be read safely.');
       const scanEnd = endOfScan(bytes, headerEnd);
-      segments.push({ marker, start: i, end: scanEnd, isScan: true, payload: bytes.subarray(j + 3, headerEnd) });
+      const header = bytes.subarray(j + 3, headerEnd);
+      segments.push({
+        marker, start: i, end: scanEnd, isScan: true, payload: header,
+        payloadStart: j + 3, padding: paddingOf(marker, header),
+      });
       i = scanEnd;
       continue;
     }
@@ -62,7 +136,11 @@ export function readSegments(bytes: Uint8Array): Segment[] {
     if (j + 3 > bytes.length) throw new MalformedFileError('This JPEG file ends unexpectedly.');
     const length = view.getUint16(j + 1);
     if (length < 2 || j + 1 + length > bytes.length) throw new MalformedFileError('This JPEG file is damaged and cannot be read safely.');
-    segments.push({ marker, start: i, end: j + 1 + length, payload: bytes.subarray(j + 3, j + 1 + length) });
+    const payload = bytes.subarray(j + 3, j + 1 + length);
+    segments.push({
+      marker, start: i, end: j + 1 + length, payload,
+      payloadStart: j + 3, padding: paddingOf(marker, payload),
+    });
     i = j + 1 + length;
   }
 
@@ -92,6 +170,55 @@ export function classify(segment: Segment): Container {
   if (marker === 0xfe) return { name: 'COM', removable: true };
   if (marker >= 0xe0 && marker <= 0xef) return { name: `APP${marker - 0xe0}`, removable: true };
   return { name: `0x${marker.toString(16)}`, removable: false, keptReason: 'Image structure' };
+}
+
+interface IccProfile {
+  declared: number;
+  chunks: number;
+  /** Bytes past the end of the declared profile, per segment. */
+  extraBySegmentStart: Map<number, number>;
+}
+
+/**
+ * An ICC profile declares its own length in its first four bytes, so FilePass can make a
+ * bounded claim about what it keeps: everything up to that length is colour data, anything
+ * after it is not part of the profile and no renderer will read it.
+ */
+function analyseIcc(segments: Segment[]): IccProfile | undefined {
+  const parts = segments
+    .filter((segment) => classify(segment).name === 'APP2/ICC')
+    .map((segment) => ({ segment, payload: segment.payload! }))
+    .filter(({ payload }) => payload.length > 14)
+    .map(({ segment, payload }) => ({ segment, no: payload[12], count: payload[13], data: payload.subarray(14) }));
+  if (parts.length === 0) return undefined;
+
+  const count = parts[0].count;
+  const consistent = parts.length === count && parts.every((part, index) => part.count === count && part.no === index + 1);
+  if (!consistent) {
+    throw new MalformedFileError('The colour profile in this image is not laid out in a way FilePass can check.');
+  }
+
+  const present = parts.reduce((total, part) => total + part.data.length, 0);
+  const head = parts[0].data;
+  if (head.length < 4) throw new MalformedFileError('The colour profile in this image is too short to read.');
+  const declared = new DataView(head.buffer, head.byteOffset, head.byteLength).getUint32(0);
+  if (declared < 128 || declared > present) {
+    throw new MalformedFileError('The colour profile in this image does not match its own declared size.');
+  }
+
+  const extraBySegmentStart = new Map<number, number>();
+  let extra = present - declared;
+  for (let i = parts.length - 1; i >= 0 && extra > 0; i--) {
+    const take = Math.min(extra, parts[i].data.length);
+    extraBySegmentStart.set(parts[i].segment.start, take);
+    extra -= take;
+  }
+  return { declared, chunks: count, extraBySegmentStart };
+}
+
+/** How many bytes to drop from the end of a segment payload before writing it out. */
+function trailingBytesToDrop(segment: Segment, icc: IccProfile | undefined): number {
+  return (segment.padding ?? 0) + (icc?.extraBySegmentStart.get(segment.start) ?? 0);
 }
 
 export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
@@ -161,6 +288,35 @@ export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
     });
   }
 
+  const icc = analyseIcc(segments);
+  if (icc) {
+    // Disclosed, not silently kept: the user is told exactly what stays in the file.
+    findings.push({
+      id: 'APP2/ICC#profile',
+      category: 'OTHER',
+      label: 'Colour profile',
+      value: `${icc.declared} bytes of colour information${icc.chunks > 1 ? ` in ${icc.chunks} parts` : ''}`,
+      container: 'APP2/ICC',
+      key: 'profile',
+      removable: false,
+      keptReason: 'Needed to display the image with the right colours',
+    });
+  }
+
+  for (const segment of segments) {
+    const drop = trailingBytesToDrop(segment, icc);
+    if (drop === 0) continue;
+    findings.push({
+      id: `PADDING#offset:${segment.start}`,
+      category: 'OTHER',
+      label: 'Extra bytes inside a picture data block',
+      value: `${drop} bytes past the end of the ${classify(segment).name} structure, which no viewer reads`,
+      container: 'PADDING',
+      key: `offset:${segment.start}`,
+      removable: true,
+    });
+  }
+
   const orientation = await readOrientation(bytes);
   if (orientation !== undefined && orientation !== 1) {
     notes.push('Rotation information is kept so the picture still appears the right way up.');
@@ -200,6 +356,7 @@ export async function clean(bytes: Uint8Array, report: InspectionReport): Promis
   const orientation = await readOrientation(bytes);
   const keepOrientation = orientation !== undefined && orientation !== 1;
   let orientationWritten = false;
+  const icc = analyseIcc(segments);
 
   for (const segment of segments) {
     const container = classify(segment);
@@ -207,7 +364,13 @@ export async function clean(bytes: Uint8Array, report: InspectionReport): Promis
       removedContainers.add(container.name);
       continue;
     }
-    parts.push(bytes.subarray(segment.start, segment.end));
+    const drop = trailingBytesToDrop(segment, icc);
+    if (drop > 0) {
+      parts.push(rebuildWithoutPadding(bytes, segment, drop));
+      removedContainers.add('PADDING');
+    } else {
+      parts.push(bytes.subarray(segment.start, segment.end));
+    }
     if (keepOrientation && !orientationWritten && container.name === 'APP0/JFIF') {
       parts.push(orientationSegment(orientation!));
       orientationWritten = true;
@@ -226,6 +389,22 @@ export async function clean(bytes: Uint8Array, report: InspectionReport): Promis
     .map((f) => f.id);
 
   return { bytes: concat(parts), promisedRemovedIds, notes };
+}
+
+/**
+ * Writes a structural segment back without the bytes that sat past its real structure.
+ * Entropy coded scan data that follows a scan header is copied across untouched.
+ */
+function rebuildWithoutPadding(bytes: Uint8Array, segment: Segment, drop: number): Uint8Array {
+  const payload = segment.payload!;
+  const kept = payload.subarray(0, payload.length - drop);
+  const header = new Uint8Array(4);
+  header[0] = 0xff;
+  header[1] = segment.marker;
+  new DataView(header.buffer).setUint16(2, kept.length + 2);
+  const afterPayload = segment.payloadStart! + payload.length;
+  const rest = bytes.subarray(afterPayload, segment.end);   // entropy data for a scan, empty otherwise
+  return concat([header, kept, rest]);
 }
 
 export function concat(parts: Uint8Array[]): Uint8Array {

@@ -129,7 +129,8 @@
    "TIME/Modified",
    "IDENTITY/Author",
    "TIME/Captured",
-   "LOCATION/GPS location"
+   "LOCATION/GPS location",
+   "OTHER/Colour profile"
   ],
   "notes": [
    "Rotation information is kept so the picture still appears the right way up."
@@ -434,6 +435,8 @@
   "verdict": "verified",
   "downloadable": true,
   "findings": [
+   "OTHER/Colour profile name",
+   "OTHER/Colour profile",
    "IDENTITY/Author",
    "DEVICE/Software",
    "DOCUMENT/Comment",
@@ -452,11 +455,11 @@
   "notes": [
    "Transparency and colour information are kept so the picture still looks the same."
   ],
-  "promised": 14,
-  "removed": 14,
+  "promised": 15,
+  "removed": 15,
   "surviving": [],
   "introduced": [],
-  "outputBytes": 647,
+  "outputBytes": 655,
   "canaries": []
  },
  {

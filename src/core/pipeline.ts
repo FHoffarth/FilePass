@@ -41,10 +41,13 @@ export async function verifyClean(
   const remainingFindings = outputReport.findings.filter((f) => sourceIds.has(f.id) && !promised.has(f.id));
   const removedIds = [...promised].filter((id) => !outputIds.has(id));
 
-  // Detected but not proven removed is the same thing as not removed. Anything the
-  // inspector can still see in the output forbids "verified", whether it was promised or not.
+  // Detected but not proven removed is the same thing as not removed. Anything the inspector
+  // can still see in the output forbids "verified" unless FilePass deliberately kept it and
+  // said so: a finding marked as kept, already present in the source, is a disclosed choice
+  // rather than surviving metadata. Everything else, promised or not, blocks success.
+  const undisclosed = outputReport.findings.filter((f) => f.removable || !sourceIds.has(f.id));
   let verdict: VerificationResult['verdict'] =
-    outputReport.findings.length === 0 && introducedFindings.length === 0 ? 'verified' : 'partial';
+    undisclosed.length === 0 && introducedFindings.length === 0 ? 'verified' : 'partial';
   let unresolved = false;
 
   if (sourceReport.format === 'pdf') {
