@@ -115,11 +115,25 @@ function buildChunk(type: string, data: Uint8Array): Uint8Array {
   return out;
 }
 
-/** Splits an iCCP chunk into its free text label and the profile bytes themselves. */
+/**
+ * Splits an iCCP chunk into its free text label and the profile bytes themselves.
+ * The format is: a profile name of 1 to 79 bytes, a NUL, one compression method byte,
+ * then the compressed profile. FilePass only rewrites structures it can account for,
+ * so anything that does not match that shape is refused rather than guessed at.
+ */
 function readProfileChunk(chunk: Chunk): { name: string; rest: Uint8Array } {
   const nul = chunk.data.indexOf(0);
-  const cut = nul < 0 ? chunk.data.length : nul;
-  return { name: utf8(chunk.data.subarray(0, cut)).trim(), rest: chunk.data.subarray(cut + 1) };
+  if (nul < 1 || nul > 79) {
+    throw new MalformedFileError('The colour profile in this image has no readable name, so FilePass will not touch it.');
+  }
+  const rest = chunk.data.subarray(nul + 1);
+  if (rest.length < 2) {
+    throw new MalformedFileError('The colour profile in this image is missing its data and cannot be checked.');
+  }
+  if (rest[0] !== 0) {
+    throw new MalformedFileError('The colour profile in this image is packed in a way FilePass does not know.');
+  }
+  return { name: utf8(chunk.data.subarray(0, nul)).trim(), rest };
 }
 
 export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
@@ -132,7 +146,7 @@ export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
       // The colour profile itself has to stay, and FilePass says so rather than letting it
       // ride along undisclosed. Its name is free text with no effect on rendering, so that
       // part is replaced with a plain label.
-      const { name } = readProfileChunk(chunk);
+      const { name, rest } = readProfileChunk(chunk);
       if (name && name !== PROFILE_LABEL) {
         findings.push({
           id: 'iCCP#name',
@@ -148,7 +162,8 @@ export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
         id: 'iCCP#profile',
         category: 'OTHER',
         label: 'Colour profile',
-        value: `${chunk.data.length} bytes of colour information`,
+        // the profile itself, not the chunk: this stays the same when the name is replaced
+        value: `${rest.length - 1} bytes of colour information`,
         container: 'iCCP-profile',
         key: 'iCCP',
         removable: false,

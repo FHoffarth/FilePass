@@ -45,7 +45,13 @@ export async function verifyClean(
   // can still see in the output forbids "verified" unless FilePass deliberately kept it and
   // said so: a finding marked as kept, already present in the source, is a disclosed choice
   // rather than surviving metadata. Everything else, promised or not, blocks success.
-  const undisclosed = outputReport.findings.filter((f) => f.removable || !sourceIds.has(f.id));
+  const sourceById = new Map(sourceReport.findings.map((f) => [f.id, f] as const));
+  const disclosedKept = (finding: Finding): boolean => {
+    if (finding.removable || !finding.keptReason) return false;      // kept on purpose, and said so
+    const original = sourceById.get(finding.id);                     // the source disclosed the same thing
+    return original !== undefined && !original.removable && original.value === finding.value;
+  };
+  const undisclosed = outputReport.findings.filter((f) => !disclosedKept(f));
   let verdict: VerificationResult['verdict'] =
     undisclosed.length === 0 && introducedFindings.length === 0 ? 'verified' : 'partial';
   let unresolved = false;
