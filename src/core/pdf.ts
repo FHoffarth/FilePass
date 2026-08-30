@@ -26,6 +26,42 @@ const ANNOT_KEYS: Record<string, { label: string; category: Category }> = {
   NM: { label: 'Comment identifier', category: 'OTHER' },
 };
 
+/**
+ * Every node of the reachable page tree above the leaves. Metadata can hang off the root
+ * /Pages node or any node between it and a page, and those are as reachable as the pages.
+ * A node that is not a dictionary is a tree FilePass will not walk; a repeated reference is
+ * visited once, so a cycle terminates instead of looping.
+ */
+function pageTreeNodes(doc: PDFDocument): { index: number; dict: PDFDict }[] {
+  const out: { index: number; dict: PDFDict }[] = [];
+  const seen = new Set<string>();
+  const queue: unknown[] = [doc.catalog.get(PDFName.of('Pages'))];
+
+  while (queue.length > 0) {
+    const entry = queue.shift();
+    if (!entry) continue;
+    let node: unknown = entry;
+    if (entry instanceof PDFRef) {
+      if (seen.has(entry.tag)) continue;
+      seen.add(entry.tag);
+      node = doc.context.lookup(entry);
+    }
+    if (!(node instanceof PDFDict)) {
+      throw new MalformedFileError('The page structure of this PDF could not be followed, so FilePass will not change it.');
+    }
+    if (node.get(PDFName.of('Type'))?.toString() === '/Page') continue;   // leaves are handled separately
+    out.push({ index: out.length, dict: node });
+    const kids = node.get(PDFName.of('Kids'));
+    if (!kids) continue;
+    const array = doc.context.lookup(kids);
+    if (!(array instanceof PDFArray)) {
+      throw new MalformedFileError('The page structure of this PDF could not be followed, so FilePass will not change it.');
+    }
+    for (let i = 0; i < array.size(); i++) queue.push(array.get(i));
+  }
+  return out;
+}
+
 function annotationDicts(doc: PDFDocument): { page: number; index: number; dict: PDFDict }[] {
   const out: { page: number; index: number; dict: PDFDict }[] = [];
   doc.getPages().forEach((page, pageIndex) => {
@@ -145,6 +181,31 @@ async function inspectDocument(bytes: Uint8Array): Promise<InspectionReport> {
     });
   }
 
+  for (const { index, dict } of pageTreeNodes(doc)) {
+    if (dict.get(PDFName.of('Metadata'))) {
+      findings.push({
+        id: `PageTreeXMP#${index}`,
+        category: 'OTHER',
+        label: index === 0 ? 'XMP metadata on the page list' : `XMP metadata on a page group (${index})`,
+        value: 'Extra metadata attached to the structure that holds the pages',
+        container: 'PageTreeXMP',
+        key: String(index),
+        removable: true,
+      });
+    }
+    if (dict.get(PDFName.of('PieceInfo'))) {
+      findings.push({
+        id: `PageTreePieceInfo#${index}`,
+        category: 'OTHER',
+        label: index === 0 ? 'Editing data on the page list' : `Editing data on a page group (${index})`,
+        value: 'Private data left behind by the program that made this file',
+        container: 'PageTreePieceInfo',
+        key: String(index),
+        removable: true,
+      });
+    }
+  }
+
   if (doc.catalog.get(PDFName.of('PieceInfo'))) {
     findings.push({
       id: 'PieceInfo#catalog',
@@ -254,6 +315,11 @@ export async function clean(bytes: Uint8Array, report: InspectionReport): Promis
   if (doc.catalog.get(PDFName.of('PieceInfo'))) {
     doc.catalog.delete(PDFName.of('PieceInfo'));
     removedContainers.add('PieceInfo');
+  }
+
+  for (const { dict } of pageTreeNodes(doc)) {
+    if (dict.get(PDFName.of('Metadata'))) { dict.delete(PDFName.of('Metadata')); removedContainers.add('PageTreeXMP'); }
+    if (dict.get(PDFName.of('PieceInfo'))) { dict.delete(PDFName.of('PieceInfo')); removedContainers.add('PageTreePieceInfo'); }
   }
 
   for (const page of doc.getPages()) {

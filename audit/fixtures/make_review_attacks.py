@@ -209,8 +209,26 @@ idats = b"".join(raw for k, raw in parts if k == b"IDAT")
 iend = next(raw for k, raw in parts if k == b"IEND")
 
 # N7: the canary rides in the iCCP profile *name*, inside a chunk FilePass keeps for rendering.
-iccp = chunk(b"iCCP", ICCP_NAME.encode() + b"\x00\x00" + zlib.compress(b"not-a-real-profile"))
+# The profile body itself is a genuine ICC profile, so only the free text name is under attack.
+from PIL import ImageCms
+REAL_ICC = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+
+
+def iccp_chunk(name, body, method=0):
+    return chunk(b"iCCP", name + b"\x00" + bytes([method]) + body)
+
+
+real = zlib.compress(REAL_ICC)
+iccp = iccp_chunk(ICCP_NAME.encode(), real)
 write("p_iccp_name.png", PNG_SIG + ihdr + iccp + chunk(b"tEXt", b"Author\x00Alice Smith") + idats + iend)
+
+# the malformed iCCP family from the PR #1 review, kept reproducible next to a valid one
+write("p_iccp_ok.png", PNG_SIG + ihdr + iccp_chunk(b"sRGB", real) + idats + iend)
+write("p_iccp_no_nul.png", PNG_SIG + ihdr + chunk(b"iCCP", b"ProfileNameWithNoTerminatorAtAll") + idats + iend)
+write("p_iccp_no_method.png", PNG_SIG + ihdr + chunk(b"iCCP", b"sRGB\x00") + idats + iend)
+write("p_iccp_bad_method.png", PNG_SIG + ihdr + iccp_chunk(b"sRGB", real, method=7) + idats + iend)
+write("p_iccp_no_payload.png", PNG_SIG + ihdr + chunk(b"iCCP", b"sRGB\x00\x00") + idats + iend)
+write("p_iccp_empty_name.png", PNG_SIG + ihdr + iccp_chunk(b"", real) + idats + iend)
 
 # N8: an unknown *critical* chunk (uppercase first letter) that a decoder must understand.
 write("p_unknown_critical.png", PNG_SIG + ihdr + chunk(b"sECr", b"critical-payload") + idats + iend)

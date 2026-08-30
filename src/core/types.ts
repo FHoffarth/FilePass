@@ -13,6 +13,12 @@ export interface Finding {
   value: string;
   /** The value exactly as it appears in the file, when that differs from the readable one. */
   rawValue?: string;
+  /**
+   * Digest of the bytes a kept finding stands for. Internal, never shown: verification
+   * compares this rather than the display text, so two retained things that happen to be
+   * described identically cannot be mistaken for each other.
+   */
+  evidence?: string;
   /** Where it lives, for the details view and for verification. */
   container: string;
   /** Raw key inside that container, e.g. "ifd0:315" or "tEXt:Author". */

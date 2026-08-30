@@ -1,4 +1,5 @@
 import { decodeTags, readOrientation } from './decode';
+import { contentDigest } from './evidence';
 import { CleanResult, Finding, InspectionReport, MalformedFileError } from './types';
 
 interface Segment {
@@ -30,6 +31,18 @@ function structuralPayloadLength(marker: number, payload: Uint8Array): number | 
   const ambiguous = () => {
     throw new MalformedFileError('This JPEG file is damaged and cannot be read safely.');
   };
+
+  if (marker === 0xe0 && latin1(payload.subarray(0, 5)) === 'JFIF\u0000') {
+    // identifier, version, density units and values, then a thumbnail of Xt * Yt RGB pixels
+    if (payload.length < 14) ambiguous();
+    return 14 + 3 * payload[12] * payload[13];
+  }
+
+  if (marker === 0xee && latin1(payload.subarray(0, 5)) === 'Adobe') {
+    // identifier, DCT encode version, two flag words, colour transform
+    if (payload.length < 12) ambiguous();
+    return 12;
+  }
 
   if (marker === 0xdb) {                                   // quantisation tables
     let i = 0;
@@ -216,6 +229,14 @@ function analyseIcc(segments: Segment[]): IccProfile | undefined {
   return { declared, chunks: count, extraBySegmentStart };
 }
 
+/** The profile itself, as the bytes a kept finding stands for. */
+function iccProfileBytes(segments: Segment[], icc: IccProfile): Uint8Array {
+  const parts = segments
+    .filter((segment) => classify(segment).name === 'APP2/ICC')
+    .map((segment) => segment.payload!.subarray(14));
+  return concat(parts).subarray(0, icc.declared);
+}
+
 /** How many bytes to drop from the end of a segment payload before writing it out. */
 function trailingBytesToDrop(segment: Segment, icc: IccProfile | undefined): number {
   return (segment.padding ?? 0) + (icc?.extraBySegmentStart.get(segment.start) ?? 0);
@@ -296,6 +317,7 @@ export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
       category: 'OTHER',
       label: 'Colour profile',
       value: `${icc.declared} bytes of colour information${icc.chunks > 1 ? ` in ${icc.chunks} parts` : ''}`,
+      evidence: await contentDigest(iccProfileBytes(segments, icc)),
       container: 'APP2/ICC',
       key: 'profile',
       removable: false,

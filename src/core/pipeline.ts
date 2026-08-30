@@ -45,11 +45,30 @@ export async function verifyClean(
   // can still see in the output forbids "verified" unless FilePass deliberately kept it and
   // said so: a finding marked as kept, already present in the source, is a disclosed choice
   // rather than surviving metadata. Everything else, promised or not, blocks success.
-  const sourceById = new Map(sourceReport.findings.map((f) => [f.id, f] as const));
+  // Retained evidence is matched on its content digest, not on its description: two kept
+  // things that read the same are not the same thing. An id that stands for more than one
+  // retained finding is ambiguous, and ambiguity is never exempt.
+  const keptKey = (f: Finding) => `${f.id}\u0000${f.evidence ?? ''}`;
+  const keptSource = new Set<string>();
+  const ambiguousIds = new Set<string>();
+  const seenSource = new Set<string>();
+  for (const finding of sourceReport.findings) {
+    if (finding.removable) continue;
+    if (seenSource.has(finding.id)) ambiguousIds.add(finding.id);
+    seenSource.add(finding.id);
+    keptSource.add(keptKey(finding));
+  }
+  const seenOutput = new Set<string>();
+  for (const finding of outputReport.findings) {
+    if (finding.removable) continue;
+    if (seenOutput.has(finding.id)) ambiguousIds.add(finding.id);
+    seenOutput.add(finding.id);
+  }
+
   const disclosedKept = (finding: Finding): boolean => {
-    if (finding.removable || !finding.keptReason) return false;      // kept on purpose, and said so
-    const original = sourceById.get(finding.id);                     // the source disclosed the same thing
-    return original !== undefined && !original.removable && original.value === finding.value;
+    if (finding.removable || !finding.keptReason || !finding.evidence) return false;
+    if (ambiguousIds.has(finding.id)) return false;
+    return keptSource.has(keptKey(finding));
   };
   const undisclosed = outputReport.findings.filter((f) => !disclosedKept(f));
   let verdict: VerificationResult['verdict'] =

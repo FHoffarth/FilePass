@@ -1,6 +1,7 @@
 import { decodeTags } from './decode';
 import { Category, CleanResult, Finding, InspectionReport, MalformedFileError } from './types';
 import { concat } from './jpeg';
+import { contentDigest } from './evidence';
 
 const SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
 
@@ -89,6 +90,9 @@ const clip = (s: string) => (s.length > 160 ? `${s.slice(0, 157)}...` : s);
 /** The label FilePass writes in place of whatever text a profile was carrying. */
 const PROFILE_LABEL = 'ICC profile';
 
+/** No real profile comes close to this, and it stops a crafted chunk from expanding forever. */
+const MAX_PROFILE_BYTES = 16 * 1024 * 1024;
+
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
   for (let n = 0; n < 256; n++) {
@@ -115,6 +119,57 @@ function buildChunk(type: string, data: Uint8Array): Uint8Array {
   return out;
 }
 
+/** PNG allows at most one embedded profile; more than one is a shape FilePass will not guess at. */
+function assertOneProfile(chunks: Chunk[]): void {
+  if (chunks.filter((chunk) => chunk.type === 'iCCP').length > 1) {
+    throw new MalformedFileError('This image carries more than one colour profile, which FilePass cannot account for.');
+  }
+}
+
+/** Inflates with a ceiling, so a small chunk cannot claim an unbounded amount of memory. */
+async function inflateBounded(data: Uint8Array, limit: number): Promise<Uint8Array | undefined> {
+  if (typeof DecompressionStream === 'undefined') return undefined;
+  try {
+    const stream = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate'));
+    const reader = stream.getReader();
+    const parts: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      if (total > limit) { await reader.cancel(); return undefined; }
+      parts.push(value);
+    }
+    return concat(parts);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Enough structure to justify calling the retained bytes a colour profile: it has to unpack,
+ * be large enough to hold an ICC header, agree with its own declared size, and carry the
+ * ICC signature. This is a validity check for the claim FilePass makes, not colour management.
+ */
+async function profileBytes(rest: Uint8Array): Promise<Uint8Array> {
+  const profile = await inflateBounded(rest.subarray(1), MAX_PROFILE_BYTES);
+  if (!profile) {
+    throw new MalformedFileError('The colour profile in this image could not be unpacked, so FilePass will not vouch for it.');
+  }
+  if (profile.length < 132) {
+    throw new MalformedFileError('The colour profile in this image is too small to be a profile.');
+  }
+  const view = new DataView(profile.buffer, profile.byteOffset, profile.byteLength);
+  if (view.getUint32(0) !== profile.length) {
+    throw new MalformedFileError('The colour profile in this image does not match its own declared size.');
+  }
+  if (utf8(profile.subarray(36, 40)) !== 'acsp') {
+    throw new MalformedFileError('The colour profile in this image is not in the expected format.');
+  }
+  return profile;
+}
+
 /**
  * Splits an iCCP chunk into its free text label and the profile bytes themselves.
  * The format is: a profile name of 1 to 79 bytes, a NUL, one compression method byte,
@@ -138,6 +193,7 @@ function readProfileChunk(chunk: Chunk): { name: string; rest: Uint8Array } {
 
 export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
   const chunks = readChunks(bytes);
+  assertOneProfile(chunks);
   const findings: Finding[] = [];
   const notes: string[] = [];
 
@@ -147,6 +203,7 @@ export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
       // ride along undisclosed. Its name is free text with no effect on rendering, so that
       // part is replaced with a plain label.
       const { name, rest } = readProfileChunk(chunk);
+      const profile = await profileBytes(rest);
       if (name && name !== PROFILE_LABEL) {
         findings.push({
           id: 'iCCP#name',
@@ -163,7 +220,8 @@ export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
         category: 'OTHER',
         label: 'Colour profile',
         // the profile itself, not the chunk: this stays the same when the name is replaced
-        value: `${rest.length - 1} bytes of colour information`,
+        value: `${profile.length} bytes of colour information`,
+        evidence: await contentDigest(profile),
         container: 'iCCP-profile',
         key: 'iCCP',
         removable: false,
@@ -240,12 +298,14 @@ function readTime(data: Uint8Array): string {
 
 export async function clean(bytes: Uint8Array, report: InspectionReport): Promise<CleanResult> {
   const chunks = readChunks(bytes);
+  assertOneProfile(chunks);
   const parts: Uint8Array[] = [bytes.subarray(0, 8)];
   const removedContainers = new Set<string>();
 
   for (const chunk of chunks) {
     if (chunk.type === 'iCCP') {
       const { name, rest } = readProfileChunk(chunk);
+      await profileBytes(rest);   // never rewrite a chunk whose profile FilePass cannot vouch for
       if (name && name !== PROFILE_LABEL) {
         const label = Uint8Array.from(PROFILE_LABEL, (ch) => ch.charCodeAt(0));
         parts.push(buildChunk('iCCP', concat([label, Uint8Array.of(0), rest])));
