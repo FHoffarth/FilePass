@@ -1,7 +1,7 @@
 {
   "name": "filepass",
   "version": "0.1.0",
-  "description": "",
+  "description": "Check what a file reveals before you share it: local-first metadata inspection, cleaning and independent verification for JPEG, PNG and PDF.",
   "main": "index.js",
   "scripts": {
     "test": "vitest run",
@@ -10,8 +10,8 @@
     "lint": "tsc --noEmit"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Florian Hoffarth",
+  "license": "MIT",
   "type": "module",
   "private": "true",
   "dependencies": {
