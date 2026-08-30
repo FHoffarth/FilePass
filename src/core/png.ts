@@ -119,6 +119,100 @@ function buildChunk(type: string, data: Uint8Array): Uint8Array {
   return out;
 }
 
+/**
+ * What each retained chunk's payload has to look like. FilePass keeps these chunks because
+ * they carry rendering information, so the rule that keeps them and the rule that accounts
+ * for their bytes have to be the same rule: a chunk whose length is not the length its own
+ * format defines is not a rendering chunk FilePass understands, and the file is refused
+ * rather than copied through. Types whose payload is genuinely free-form - the image data
+ * itself - are listed as such instead of being given a false boundary.
+ */
+type ChunkShape =
+  | { kind: 'fixed'; length: number }
+  | { kind: 'image' }
+  | { kind: 'parsed' };
+
+const FIXED_CHUNK_LENGTHS: Record<string, number> = {
+  IHDR: 13, IEND: 0, gAMA: 4, cHRM: 32, sRGB: 1, pHYs: 9,
+  acTL: 8, fcTL: 26, cICP: 4, mDCv: 24, cLLi: 8,
+};
+
+/** Payload sizes that depend on how the image itself is encoded. */
+interface ImageShape {
+  colourType: number;
+  paletteEntries: number;
+}
+
+function readImageShape(chunks: Chunk[]): ImageShape {
+  const ihdr = chunks.find((chunk) => chunk.type === 'IHDR');
+  if (!ihdr || ihdr.data.length !== 13) {
+    throw new MalformedFileError('This PNG file is damaged and cannot be read safely.');
+  }
+  const palette = chunks.find((chunk) => chunk.type === 'PLTE');
+  return { colourType: ihdr.data[9], paletteEntries: palette ? Math.floor(palette.data.length / 3) : 0 };
+}
+
+function shapeFailure(type: string): never {
+  throw new MalformedFileError(`The ${type} block in this image is not the size that format defines, so FilePass will not vouch for it.`);
+}
+
+/** Every chunk FilePass keeps has to account for its own payload, or the file is refused. */
+function assertRetainedChunkShapes(chunks: Chunk[]): void {
+  const { colourType, paletteEntries } = readImageShape(chunks);
+
+  for (const chunk of chunks) {
+    if (!RENDERING_CHUNKS.has(chunk.type)) continue;
+    const size = chunk.data.length;
+    const fixed = FIXED_CHUNK_LENGTHS[chunk.type];
+    if (fixed !== undefined) {
+      if (size !== fixed) shapeFailure(chunk.type);
+      continue;
+    }
+
+    switch (chunk.type) {
+      case 'IDAT':
+      case 'iCCP':
+        continue;                                   // image data, and the profile checked separately
+      case 'fdAT':
+        if (size < 4) shapeFailure(chunk.type);     // sequence number, then frame data
+        continue;
+      case 'PLTE':
+        if (size === 0 || size % 3 !== 0 || size > 768) shapeFailure(chunk.type);
+        continue;
+      case 'tRNS':
+        if (colourType === 0 && size !== 2) shapeFailure(chunk.type);
+        if (colourType === 2 && size !== 6) shapeFailure(chunk.type);
+        if (colourType === 3 && (size === 0 || size > paletteEntries)) shapeFailure(chunk.type);
+        if (colourType === 4 || colourType === 6) shapeFailure(chunk.type);
+        continue;
+      case 'sBIT': {
+        const expected = { 0: 1, 2: 3, 3: 3, 4: 2, 6: 4 }[colourType as 0 | 2 | 3 | 4 | 6];
+        if (expected === undefined || size !== expected) shapeFailure(chunk.type);
+        continue;
+      }
+      case 'bKGD': {
+        const expected = { 0: 2, 2: 6, 3: 1, 4: 2, 6: 6 }[colourType as 0 | 2 | 3 | 4 | 6];
+        if (expected === undefined || size !== expected) shapeFailure(chunk.type);
+        continue;
+      }
+      case 'hIST':
+        if (paletteEntries === 0 || size !== paletteEntries * 2) shapeFailure(chunk.type);
+        continue;
+      case 'sPLT': {
+        const nul = chunk.data.indexOf(0);
+        if (nul < 1 || nul > 79 || size < nul + 2) shapeFailure(chunk.type);
+        const depth = chunk.data[nul + 1];
+        const entry = depth === 8 ? 6 : depth === 16 ? 10 : 0;
+        if (entry === 0 || (size - nul - 2) % entry !== 0) shapeFailure(chunk.type);
+        continue;
+      }
+      default:
+        // Retained without a boundary FilePass can state: refuse rather than keep it silently.
+        shapeFailure(chunk.type);
+    }
+  }
+}
+
 /** PNG allows at most one embedded profile; more than one is a shape FilePass will not guess at. */
 function assertOneProfile(chunks: Chunk[]): void {
   if (chunks.filter((chunk) => chunk.type === 'iCCP').length > 1) {
@@ -194,6 +288,7 @@ function readProfileChunk(chunk: Chunk): { name: string; rest: Uint8Array } {
 export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
   const chunks = readChunks(bytes);
   assertOneProfile(chunks);
+  assertRetainedChunkShapes(chunks);
   const findings: Finding[] = [];
   const notes: string[] = [];
 
@@ -299,6 +394,7 @@ function readTime(data: Uint8Array): string {
 export async function clean(bytes: Uint8Array, report: InspectionReport): Promise<CleanResult> {
   const chunks = readChunks(bytes);
   assertOneProfile(chunks);
+  assertRetainedChunkShapes(chunks);
   const parts: Uint8Array[] = [bytes.subarray(0, 8)];
   const removedContainers = new Set<string>();
 

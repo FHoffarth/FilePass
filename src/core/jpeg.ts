@@ -174,7 +174,9 @@ export function classify(segment: Segment): Container {
   if (segment.isTrailing) return { name: 'TRAILING', removable: true };
   const head = segment.payload ? latin1(segment.payload.subarray(0, 32)) : '';
   const { marker } = segment;
-  if (marker === 0xe0 && head.startsWith('JFIF')) return { name: 'APP0/JFIF', removable: false, keptReason: 'Needed to display the image correctly' };
+  // The identifier includes its terminator. A payload that only looks like JFIF is not JFIF,
+  // and must not reach the retention path the structural model is written for.
+  if (marker === 0xe0 && head.startsWith('JFIF\u0000')) return { name: 'APP0/JFIF', removable: false, keptReason: 'Needed to display the image correctly' };
   if (marker === 0xe1 && head.startsWith('Exif') && segment.payload?.[4] === 0) return { name: 'APP1/EXIF', removable: true };
   if (marker === 0xe1 && head.startsWith('http://ns.adobe.com/xap/1.0/')) return { name: 'APP1/XMP', removable: true };
   if (marker === 0xe2 && head.startsWith('ICC_PROFILE')) return { name: 'APP2/ICC', removable: false, keptReason: 'Colour profile, needed to display the image correctly' };

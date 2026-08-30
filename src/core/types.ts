@@ -63,6 +63,8 @@ export interface VerificationResult {
   introducedFindings: Finding[];
   /** Present in source and output, never promised (kept on purpose or not removable). */
   remainingFindings: Finding[];
+  /** Disclosed as kept in the source, but no longer present in the output. */
+  missingRetained: Finding[];
   outputReport: InspectionReport;
 }
 

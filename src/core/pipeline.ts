@@ -65,6 +65,14 @@ export async function verifyClean(
     seenOutput.add(finding.id);
   }
 
+  // Retained evidence that the source disclosed has to still be there. Changed evidence was
+  // already caught; evidence that simply vanished was not, and a profile quietly dropped is
+  // no more verified than one quietly swapped.
+  const outputKept = new Set(outputReport.findings.filter((f) => !f.removable).map(keptKey));
+  const missingRetained = sourceReport.findings.filter(
+    (finding) => !finding.removable && !promised.has(finding.id) && !outputKept.has(keptKey(finding)),
+  );
+
   const disclosedKept = (finding: Finding): boolean => {
     if (finding.removable || !finding.keptReason || !finding.evidence) return false;
     if (ambiguousIds.has(finding.id)) return false;
@@ -72,7 +80,8 @@ export async function verifyClean(
   };
   const undisclosed = outputReport.findings.filter((f) => !disclosedKept(f));
   let verdict: VerificationResult['verdict'] =
-    undisclosed.length === 0 && introducedFindings.length === 0 ? 'verified' : 'partial';
+    undisclosed.length === 0 && introducedFindings.length === 0 && missingRetained.length === 0
+      ? 'verified' : 'partial';
   let unresolved = false;
 
   if (sourceReport.format === 'pdf') {
@@ -98,7 +107,7 @@ export async function verifyClean(
   if (survivingFindings.length > 0) verdict = 'partial';
   else if (unresolved && verdict === 'verified') verdict = 'unverified';
 
-  return { verdict, removedIds, survivingFindings, introducedFindings, remainingFindings, outputReport };
+  return { verdict, removedIds, survivingFindings, introducedFindings, remainingFindings, missingRetained, outputReport };
 }
 
 export interface CleanRun {
