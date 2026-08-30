@@ -7,9 +7,30 @@ interface Segment {
   end: number;
   payload?: Uint8Array;
   isScan?: boolean;
+  /** Bytes that follow the end-of-image marker. Not part of the picture. */
+  isTrailing?: boolean;
 }
 
 const latin1 = (b: Uint8Array) => Array.from(b, (c) => String.fromCharCode(c)).join('');
+
+/**
+ * Walks the entropy coded scan: stuffed FF00 pairs, fill bytes and restart markers all
+ * belong to the picture, anything else is the next real marker. This is what makes
+ * metadata placed after a scan visible to FilePass instead of being swallowed by it.
+ */
+function endOfScan(bytes: Uint8Array, from: number): number {
+  let i = from;
+  while (i < bytes.length) {
+    if (bytes[i] !== 0xff) { i += 1; continue; }
+    const next = bytes[i + 1];
+    if (next === undefined) break;
+    if (next === 0x00) { i += 2; continue; }                   // stuffed data byte
+    if (next === 0xff) { i += 1; continue; }                   // fill byte
+    if (next >= 0xd0 && next <= 0xd7) { i += 2; continue; }    // restart marker
+    return i;                                                  // a real marker starts here
+  }
+  throw new MalformedFileError('This JPEG file ends before the end of the image.');
+}
 
 /** Walks every marker segment. Nothing in a JPEG can be invisible to FilePass, only undecoded. */
 export function readSegments(bytes: Uint8Array): Segment[] {
@@ -17,20 +38,37 @@ export function readSegments(bytes: Uint8Array): Segment[] {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const segments: Segment[] = [];
   let i = 2;
+  let endOfImage = -1;
+
   while (i < bytes.length) {
     if (bytes[i] !== 0xff) throw new MalformedFileError('This JPEG file is damaged and cannot be read safely.');
     let j = i + 1;
     while (bytes[j] === 0xff) j++;
     const marker = bytes[j];
     if (marker === undefined) throw new MalformedFileError('This JPEG file ends unexpectedly.');
-    if (marker === 0xd9) { segments.push({ marker, start: i, end: j + 1 }); break; }
-    if (marker === 0xda) { segments.push({ marker, start: i, end: bytes.length, isScan: true }); break; }
-    if (marker >= 0xd0 && marker <= 0xd8) { segments.push({ marker, start: i, end: j + 1 }); i = j + 1; continue; }
+
+    if (marker === 0xd9) { segments.push({ marker, start: i, end: j + 1 }); endOfImage = j + 1; break; }
+    if (marker === 0xda) {
+      if (j + 3 > bytes.length) throw new MalformedFileError('This JPEG file ends unexpectedly.');
+      const headerLength = view.getUint16(j + 1);
+      const headerEnd = j + 1 + headerLength;
+      if (headerLength < 2 || headerEnd > bytes.length) throw new MalformedFileError('This JPEG file is damaged and cannot be read safely.');
+      const scanEnd = endOfScan(bytes, headerEnd);
+      segments.push({ marker, start: i, end: scanEnd, isScan: true, payload: bytes.subarray(j + 3, headerEnd) });
+      i = scanEnd;
+      continue;
+    }
+    if ((marker >= 0xd0 && marker <= 0xd8) || marker === 0x01) { segments.push({ marker, start: i, end: j + 1 }); i = j + 1; continue; }
     if (j + 3 > bytes.length) throw new MalformedFileError('This JPEG file ends unexpectedly.');
     const length = view.getUint16(j + 1);
     if (length < 2 || j + 1 + length > bytes.length) throw new MalformedFileError('This JPEG file is damaged and cannot be read safely.');
     segments.push({ marker, start: i, end: j + 1 + length, payload: bytes.subarray(j + 3, j + 1 + length) });
     i = j + 1 + length;
+  }
+
+  if (endOfImage < 0) throw new MalformedFileError('This JPEG file ends before the end of the image.');
+  if (endOfImage < bytes.length) {
+    segments.push({ marker: -1, start: endOfImage, end: bytes.length, isTrailing: true });
   }
   return segments;
 }
@@ -42,6 +80,7 @@ export interface Container {
 }
 
 export function classify(segment: Segment): Container {
+  if (segment.isTrailing) return { name: 'TRAILING', removable: true };
   const head = segment.payload ? latin1(segment.payload.subarray(0, 32)) : '';
   const { marker } = segment;
   if (marker === 0xe0 && head.startsWith('JFIF')) return { name: 'APP0/JFIF', removable: false, keptReason: 'Needed to display the image correctly' };
@@ -91,6 +130,18 @@ export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
         label: 'Comment',
         value: latin1(segment.payload ?? new Uint8Array()).replace(/[\u0000-\u001f]/g, ' ').trim() || `${size} bytes`,
         container: 'COM',
+        key: `offset:${segment.start}`,
+        removable: true,
+      });
+      continue;
+    }
+    if (container.name === 'TRAILING') {
+      findings.push({
+        id: `TRAILING#offset:${segment.start}`,
+        category: 'OTHER',
+        label: 'Extra data after the end of the image',
+        value: `${segment.end - segment.start} bytes that are not part of the picture`,
+        container: 'TRAILING',
         key: `offset:${segment.start}`,
         removable: true,
       });

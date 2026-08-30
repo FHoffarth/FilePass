@@ -1,0 +1,28 @@
+j_trailing_dirty.jpg verdict=verified findings=8 removed=8
+j_com_after_sos.jpg findings=["DOCUMENT/Comment"] verdict=verified
+d_multi_meta.pdf verdict=verified findings=6 removed=6
+d_objstm.pdf verdict=verified findings=["DOCUMENT/Title","IDENTITY/Author","DEVICE/Produced by"]
+  independent check on output: ok=true leftovers=0 residue=0
+  backstop on an uncleaned file: 3 hits (Embedded metadata block, Title, Author)
+JPEG scan data identical for 8 fixtures
+j_orient1.jpg: orientation in output = none (source 1)
+j_orient6.jpg: orientation in output = 6 (source 6)
+j_orient8.jpg: orientation in output = 8 (source 8)
+ICC (APP2) and Adobe (APP14) segments preserved
+p_full.png: IHDR gAMA sRGB pHYs iCCP tEXt tEXt tEXt zTXt iTXt iTXt tIME eXIf IDAT IEND  ->  IHDR gAMA sRGB pHYs iCCP IDAT IEND
+p_palette_trns.png: IHDR PLTE tRNS tEXt tEXt tEXt zTXt iTXt iTXt tIME eXIf IDAT IEND  ->  IHDR PLTE tRNS IDAT IEND
+p_apng.png: IHDR acTL tEXt tEXt tEXt zTXt iTXt iTXt tIME eXIf fcTL IDAT fcTL fdAT IEND  ->  IHDR acTL fcTL IDAT fcTL fdAT IEND
+p_text_after_idat.png: IHDR IDAT tEXt tEXt tEXt zTXt iTXt iTXt tIME eXIf IEND  ->  IHDR IDAT IEND
+dirty.pdf: pages 1 -> 1, text "Confidential Proposal v7"
+d_multi_meta.pdf: pages 1 -> 1, text "Contact Alice Smith on 0170 5551234"
+d_custom_keys.pdf: pages 1 -> 1, text "Contact Alice Smith on 0170 5551234"
+d_incremental.pdf: pages 1 -> 1, text "Contact Alice Smith on 0170 5551234"
+d_objstm.pdf: pages 1 -> 1, text "Contact Alice Smith on 0170 5551234"
+d_visible_only.pdf: pages 1 -> 1, text "Contact Alice Smith on 0170 5551234"
+d_truncated.pdf verdict=refused findings=0 downloadable=false
+PNG trailing data dropped by the chunk rebuild
+d_incremental.pdf findings=["DOCUMENT/Title","IDENTITY/Author","OTHER/XMP metadata block"] verdict=verified
+d_annotation.pdf findings=["IDENTITY/Comment author (page 1)","TIME/Comment modified (page 1)","OTHER/Comment identifier (page 1)"] verdict=verified canaryInSource=true canaryInOutput=false
+d_annot_plus_info.pdf findings=["DOCUMENT/Title","IDENTITY/Author","DEVICE/Produced by","IDENTITY/Comment author (page 1)","TIME/Comment modified (page 1)"] verdict=verified downloadable=true canaryInOutput=false
+j_progressive.jpg: scans=10 findings=3 verdict=verified
+j_restart.jpg: scans=1 findings=3 verdict=verified

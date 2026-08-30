@@ -1,0 +1,14 @@
+dirty.pdf | pdf | 10 | verified | YES | 
+no_metadata.pdf | pdf | 0 | verified | YES | 
+signed.pdf | pdf | 3 | refused | no | This PDF is digitally signed.
+malformed.pdf | - | - | error | no | This PDF could not be read safely, so FilePass will not change it.
+empty.pdf | - | - | error | no | This file is empty.
+d_visible_only.pdf | pdf | 0 | verified | YES | 
+d_multi_meta.pdf | pdf | 6 | verified | YES | 
+d_custom_keys.pdf | pdf | 5 | verified | YES | 
+d_truncated.pdf | pdf | 0 | refused | no | This PDF could not be read the same way twice.
+d_encrypted.pdf | - | - | error | no | This PDF is password protected. FilePass does not open protected files.
+d_leading_junk.pdf | - | - | error | no | FilePass v0 supports JPEG, PNG and PDF files only.
+d_trailing.pdf | pdf | 1 | verified | YES | 
+d_incremental.pdf | pdf | 3 | verified | YES | 
+d_objstm.pdf | pdf | 3 | verified | YES | 

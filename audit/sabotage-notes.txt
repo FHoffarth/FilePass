@@ -1,0 +1,20 @@
+1. verdict=partial surviving=11 removed=0
+2. verdict=partial surviving=Author,Software,Created
+3. verdict=partial introduced=15
+7. malformed output throws out of verifyClean, no verdict is produced
+8. empty output throws out of verifyClean
+9. jpeg source, png output: verdict=partial outputFormat=png introduced=15
+5. verdict=unverified
+bomb x10: file 200 KB expands to ~200 MB, parsed in 5373 ms, findings 10, heap delta -4 MB, longest displayed value 160 chars
+6. thrown verifier propagates as an error, never verified
+5b. verdict=partial surviving=Author
+sniff: random bytes named .pdf: refused (FilePass v0 supports JPEG, PNG and PDF files only.)
+sniff: empty file: refused (This file is empty.)
+sniff: truncated JPEG signature: refused (FilePass v0 supports JPEG, PNG and PDF files only.)
+sniff: truncated PNG signature: refused (FilePass v0 supports JPEG, PNG and PDF files only.)
+sniff: leading junk before %PDF: refused (FilePass v0 supports JPEG, PNG and PDF files only.)
+sniff: ZIP (docx/odt): refused (FilePass v0 supports JPEG, PNG and PDF files only.)
+size: limit - 1: MalformedFileError - This JPEG file is damaged and cannot be read safely.
+size: limit: MalformedFileError - This JPEG file is damaged and cannot be read safely.
+size: limit + 1: FileTooLargeError - This file is larger than 50 MB. FilePass keeps everything in
+bomb: parsed in 1285 ms, finding value length 160, file 41025 bytes

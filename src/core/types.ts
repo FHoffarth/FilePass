@@ -11,6 +11,8 @@ export interface Finding {
   label: string;
   /** Plain-language value, already decoded. Rendered as text, never as HTML. */
   value: string;
+  /** The value exactly as it appears in the file, when that differs from the readable one. */
+  rawValue?: string;
   /** Where it lives, for the details view and for verification. */
   container: string;
   /** Raw key inside that container, e.g. "ifd0:315" or "tEXt:Author". */

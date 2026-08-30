@@ -1,0 +1,30 @@
+dirty.pdf
+  pdf-lib: Author, Company, Created, Created with, Keywords, Modified, Produced by, Subject, Title, XMP metadata block
+  pdf.js : Author, CreationDate, Creator, Keywords, ModDate, Producer, Subject, Title | xmp 631 bytes
+no_metadata.pdf
+  pdf-lib: -
+  pdf.js : - | xmp none
+signed.pdf
+  pdf-lib: Author, Title, XMP metadata block
+  pdf.js : Author, Title | xmp 631 bytes
+d_visible_only.pdf
+  pdf-lib: -
+  pdf.js : - | xmp none
+d_multi_meta.pdf
+  pdf-lib: Author, Editing data on page 1, Produced by, Title, XMP metadata block, XMP metadata on page 1
+  pdf.js : Author, Producer, Title | xmp 373 bytes
+d_custom_keys.pdf
+  pdf-lib: Author, Company, GTS_PDFXVersion, SourceModified, XSNCoworkerName
+  pdf.js : Author | xmp none
+d_truncated.pdf
+  pdf-lib: -
+  pdf.js : ERROR: Invalid PDF structure. | xmp none
+d_trailing.pdf
+  pdf-lib: Author
+  pdf.js : Author | xmp none
+d_incremental.pdf
+  pdf-lib: Author, Title, XMP metadata block
+  pdf.js : Author, Title | xmp 360 bytes
+d_objstm.pdf
+  pdf-lib: Author, Produced by, Title
+  pdf.js : Author, Producer, Title | xmp none

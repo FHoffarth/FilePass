@@ -219,8 +219,9 @@ function Result({
         </p>
         <ul>
           {verification.survivingFindings.map((f) => <li key={f.id}>{f.label}: {f.value}</li>)}
+          {verification.remainingFindings.map((f) => <li key={`kept-${f.id}`}>{f.label}: {f.value}</li>)}
           {verification.introducedFindings.map((f) => <li key={`new-${f.id}`}>{f.label} (new in the copy)</li>)}
-          {verification.survivingFindings.length === 0 && verification.introducedFindings.length === 0 && (
+          {verification.survivingFindings.length === 0 && verification.remainingFindings.length === 0 && verification.introducedFindings.length === 0 && (
             <li>The second check on this file did not complete, so nothing is being claimed.</li>
           )}
         </ul>
