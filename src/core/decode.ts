@@ -97,20 +97,6 @@ export async function decodeTags(bytes: Uint8Array): Promise<DecodedTag[]> {
   return out;
 }
 
-/**
- * Whether the decoder made sense of the EXIF at all, which is a different question from
- * whether any of it is worth reporting: an EXIF block holding nothing but the orientation
- * tag decodes perfectly and yields no findings, while a corrupt one yields none either.
- */
-export async function exifIsReadable(bytes: Uint8Array): Promise<boolean> {
-  try {
-    const parsed: any = await exifr.parse(bytes as any, EXIFR_OPTIONS as any);
-    return Boolean(parsed && (parsed.ifd0 || parsed.exif || parsed.gps));
-  } catch {
-    return false;
-  }
-}
-
 /** Orientation drives how the image is displayed; FilePass preserves it rather than rotating photos. */
 export async function readOrientation(bytes: Uint8Array): Promise<number | undefined> {
   try {

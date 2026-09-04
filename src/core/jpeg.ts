@@ -1,4 +1,5 @@
-import { decodeTags, exifIsReadable, readOrientation } from './decode';
+import { decodeTags, readOrientation } from './decode';
+import { exifIsAccountedFor } from './exif';
 import { contentDigest } from './evidence';
 import { CleanResult, Finding, InspectionReport, MalformedFileError } from './types';
 
@@ -296,8 +297,6 @@ export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
   const decoded = await decodeTags(bytes);
   const containers = segments.filter((s) => !s.isScan).map((s) => ({ segment: s, container: classify(s) }));
   const hasExif = containers.some((c) => c.container.name === 'APP1/EXIF');
-  // Only ask the second question when the first one came back empty.
-  const exifReadable = hasExif && decoded.length === 0 ? await exifIsReadable(bytes) : true;
 
   // Decoded EXIF/GPS content, attributed to the segment it came from.
   if (hasExif) {
@@ -319,10 +318,12 @@ export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
     if (!container.removable) continue;
     const size = segment.payload?.length ?? 0;
     if (container.name === 'APP1/EXIF') {
-      // Decoded tag by tag above, unless nothing could be decoded at all: a container
-      // FilePass recognised and cannot read is still something the file is carrying,
-      // and saying nothing about it would report the file as clean.
-      if (decoded.length > 0 || exifReadable) continue;
+      // Decoded tag by tag above. What that cannot answer is whether the block holds
+      // anything else: a single valid tag is enough for a decoder to return something
+      // while the rest of the segment points outside itself or is never referred to at
+      // all. A block whose every byte the structure accounts for has been understood;
+      // one that does not is reported, whatever the decoder managed to read from it.
+      if (exifIsAccountedFor(segment.payload!)) continue;
       findings.push({
         id: `APP1/EXIF#offset:${segment.start}`,
         category: 'OTHER',
