@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Product tests
+        run: npx vitest run
+      - name: Audit tests
+        run: npx vitest run --config audit/vitest.config.ts
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Production build
+        run: npx vite build
+      - name: Dependency audit
+        run: npm audit --audit-level=high

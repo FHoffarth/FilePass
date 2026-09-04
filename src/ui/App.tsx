@@ -75,6 +75,10 @@ export default function App() {
   }, [stage, outputName]);
 
   const reset = () => {
+    if (downloadRef.current) {
+      URL.revokeObjectURL(downloadRef.current);   // the cleaned copy should not outlive the session
+      downloadRef.current = null;
+    }
     setStage({ name: 'idle' });
     if (inputRef.current) inputRef.current.value = '';
   };
