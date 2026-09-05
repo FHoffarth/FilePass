@@ -1,5 +1,5 @@
-import { decodeTags, readOrientation } from './decode';
-import { exifIsAccountedFor } from './exif';
+import { decodeTags } from './decode';
+import { assessExif } from './exif';
 import { contentDigest } from './evidence';
 import { CleanResult, Finding, InspectionReport, MalformedFileError } from './types';
 
@@ -294,15 +294,24 @@ export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
   const findings: Finding[] = [];
   const notes: string[] = [];
 
-  const decoded = await decodeTags(bytes);
   const containers = segments.filter((s) => !s.isScan).map((s) => ({ segment: s, container: classify(s) }));
-  const hasExif = containers.some((c) => c.container.name === 'APP1/EXIF');
+  const exifSegments = containers.filter(c => c.container.name === 'APP1/EXIF');
+  const exif = new Map(await Promise.all(exifSegments.map(async ({ segment }) => {
+    // Bind display decoding to this APP1, not whichever EXIF block a whole-file
+    // parser happens to choose. JPEG framing is enough for metadata decoding.
+    const decoded = await decodeTags(concat([
+      new Uint8Array([0xff, 0xd8]), bytes.subarray(segment.start, segment.end), new Uint8Array([0xff, 0xd9]),
+    ]));
+    return [segment.start, { assessment: assessExif(segment.payload!), decoded }] as const;
+  })));
+  const orientations = new Set([...exif.values()].flatMap(({ assessment }) =>
+    assessment.status === 'valid' && assessment.orientation !== undefined ? [assessment.orientation] : []));
+  const conflictingOrientations = orientations.size > 1;
 
-  // Decoded EXIF/GPS content, attributed to the segment it came from.
-  if (hasExif) {
+  for (const [start, { decoded }] of exif) {
     for (const tag of decoded) {
       findings.push({
-        id: `APP1/EXIF#${tag.key}`,
+        id: `APP1/EXIF#${tag.key}${exif.size > 1 ? `@${start}` : ''}`,
         category: tag.category,
         label: tag.label,
         value: tag.value,
@@ -318,12 +327,11 @@ export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
     if (!container.removable) continue;
     const size = segment.payload?.length ?? 0;
     if (container.name === 'APP1/EXIF') {
-      // Decoded tag by tag above. What that cannot answer is whether the block holds
-      // anything else: a single valid tag is enough for a decoder to return something
-      // while the rest of the segment points outside itself or is never referred to at
-      // all. A block whose every byte the structure accounts for has been understood;
-      // one that does not is reported, whatever the decoder managed to read from it.
-      if (exifIsAccountedFor(segment.payload!)) continue;
+      const { assessment, decoded } = exif.get(segment.start)!;
+      // Validity and disclosure are separate. Unknown/ignored content cannot
+      // borrow validity from a rendering tag or findings from another APP1.
+      if (!conflictingOrientations && assessment.status === 'valid' && !assessment.alwaysReport
+        && (!assessment.hasContent || decoded.length > 0)) continue;
       findings.push({
         id: `APP1/EXIF#offset:${segment.start}`,
         category: 'OTHER',
@@ -417,7 +425,7 @@ export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
     });
   }
 
-  const orientation = await readOrientation(bytes);
+  const orientation = exifOrientation(segments);
   if (orientation !== undefined && orientation !== 1) {
     notes.push('Rotation information is kept so the picture still appears the right way up.');
   }
@@ -425,7 +433,19 @@ export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
   return { format: 'jpeg', byteLength: bytes.length, findings, notes };
 }
 
-/** Minimal EXIF APP1 carrying nothing but the orientation tag. */
+/** Never promote a parser-coerced or conflicting source value into clean output. */
+function exifOrientation(segments: Segment[]): number | undefined {
+  const values = new Set<number>();
+  for (const segment of segments) {
+    if (classify(segment).name !== 'APP1/EXIF') continue;
+    const assessment = assessExif(segment.payload!);
+    if (assessment.status !== 'valid') return undefined;
+    if (assessment.orientation !== undefined) values.add(assessment.orientation);
+  }
+  return values.size === 1 ? [...values][0] : undefined;
+}
+
+/** Minimal EXIF APP1 carrying nothing but a validated orientation tag. */
 function orientationSegment(orientation: number): Uint8Array {
   const tiff = new Uint8Array(8 + 2 + 12 + 4);
   const view = new DataView(tiff.buffer);
@@ -454,7 +474,7 @@ export async function clean(bytes: Uint8Array, report: InspectionReport): Promis
   const removedContainers = new Set<string>();
   const notes: string[] = [];
 
-  const orientation = await readOrientation(bytes);
+  const orientation = exifOrientation(segments);
   const keepOrientation = orientation !== undefined && orientation !== 1;
   let orientationWritten = false;
   const icc = analyseIcc(segments);
