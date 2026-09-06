@@ -67,7 +67,7 @@ type Inflated =
   | { status: 'overflow' }
   | { status: 'unreadable' };
 
-async function inflateBounded(data: Uint8Array, limit: number): Promise<Inflated> {
+async function inflateBounded(data: Uint8Array, limit: number, budget?: TextBudget): Promise<Inflated> {
   if (typeof DecompressionStream === 'undefined') return { status: 'unreadable' };
   try {
     const stream = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate'));
@@ -78,11 +78,16 @@ async function inflateBounded(data: Uint8Array, limit: number): Promise<Inflated
       const { done, value } = await reader.read();
       if (done) break;
       total += value.length;
+      // Charged as it arrives. A stream that hands over most of its bytes and then dies has
+      // still spent them, and counting only streams that finish would let a broken one work
+      // for free.
+      budget?.spend(value.length);
       if (total > limit) { await reader.cancel(); return { status: 'overflow' }; }
       parts.push(value);
     }
     return { status: 'ok', bytes: concat(parts) };
-  } catch {
+  } catch (error) {
+    if (error instanceof MalformedFileError) throw error;   // a refusal is not a read failure
     return { status: 'unreadable' };
   }
 }
@@ -108,13 +113,12 @@ class TextBudget {
 }
 
 async function inflate(data: Uint8Array, budget: TextBudget): Promise<Uint8Array | undefined> {
-  const unpacked = await inflateBounded(data, MAX_TEXT_BYTES);
+  const unpacked = await inflateBounded(data, MAX_TEXT_BYTES, budget);
   if (unpacked.status === 'overflow') {
     throw new MalformedFileError('The text in this image unpacks to more than FilePass will read, so it will not vouch for it.');
   }
   if (unpacked.status === 'unreadable') return undefined;
-  budget.spend(unpacked.bytes.length);
-  return unpacked.bytes;
+  return unpacked.bytes;                                    // already charged while reading
 }
 
 /** Reads keyword and text out of a tEXt / zTXt / iTXt chunk. Values may be untrusted text. */
