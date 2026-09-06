@@ -67,6 +67,25 @@ type Inflated =
   | { status: 'overflow' }
   | { status: 'unreadable' };
 
+/**
+ * Letting go of a stream FilePass has stopped reading.
+ *
+ * Cancelling is a courtesy to the stream and nothing more, so nothing here waits on it or
+ * looks at how it went. The underlying source decides what `cancel()` does, and it may
+ * reject, throw, or never settle at all. A rejection allowed to travel would replace the
+ * reason FilePass gave up with a cleanup failure - which is not a MalformedFileError, so the
+ * refusal would come back as merely unreadable text and the file would be accepted. Waiting
+ * on one that never settles would leave the answer outstanding forever. Neither is a thing
+ * cleanup gets to decide.
+ */
+function abandon(reader: { cancel(): Promise<unknown> }): void {
+  try {
+    void reader.cancel().catch(() => {});      // handled here so it cannot surface elsewhere
+  } catch {
+    // a source that throws on cancel is still just a source FilePass has finished with
+  }
+}
+
 async function inflateBounded(
   data: Uint8Array,
   limit: number,
@@ -84,11 +103,11 @@ async function inflateBounded(
       total += value.length;
       // The chunk that breaks the ceiling is not charged, which is only safe because every
       // caller turns 'overflow' into a refusal. If one ever tolerates it, charge first.
-      if (total > limit) { await reader.cancel(); return { status: 'overflow' }; }
+      if (total > limit) { abandon(reader); return { status: 'overflow' }; }
       try {
         onBytes?.(value.length);
       } catch (error) {
-        await reader.cancel();
+        abandon(reader);
         throw error;
       }
       parts.push(value);
