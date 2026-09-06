@@ -1,0 +1,1 @@
+j_icc_canary.jpg | findings=9 | verdict=verified | download=true | canary in output=gone

@@ -1,0 +1,4 @@
+d_annotation.pdf findings=["IDENTITY/Comment author (page 1)","TIME/Comment modified (page 1)","OTHER/Comment identifier (page 1)"] verdict=verified canaryInSource=true canaryInOutput=false
+d_annot_plus_info.pdf findings=["DOCUMENT/Title","IDENTITY/Author","DEVICE/Produced by","IDENTITY/Comment author (page 1)","TIME/Comment modified (page 1)"] verdict=verified downloadable=true canaryInOutput=false
+j_progressive.jpg: scans=10 findings=3 verdict=verified
+j_restart.jpg: scans=1 findings=3 verdict=verified

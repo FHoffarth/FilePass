@@ -121,3 +121,33 @@ export function measurement(line: string): void {
   mkdirSync('audit/run', { recursive: true });
   appendFileSync('audit/run/measurements.txt', line + '\n');
 }
+
+/**
+ * Which test file owns which tracked evidence artifact.
+ *
+ * One artifact, one writer. A file two test files write is not evidence: vitest runs test
+ * files in parallel, so what the file ends up holding depends on which of them finished
+ * last. That is not a theoretical worry - running gaps.test.ts and then evidence.test.ts
+ * used to destroy four recorded lines, and icc-check.test.ts then review-attacks.test.ts
+ * destroyed two more, silently and with every test still passing.
+ *
+ * Volatile run data - timings, heap deltas - is not evidence and does not belong here; it
+ * goes to audit/run/ via measurement(), which is not tracked.
+ *
+ * evidence-ownership.test.ts checks this table against what the sources actually do.
+ */
+export const EVIDENCE_OWNERS: Record<string, string> = {
+  'audit/chunks-png.txt': 'audit/matrix.test.ts',
+  'audit/evidence-notes.txt': 'audit/evidence.test.ts',
+  'audit/gaps-notes.txt': 'audit/gaps.test.ts',
+  'audit/icc-notes.txt': 'audit/icc-check.test.ts',
+  'audit/matrix-jpeg.txt': 'audit/matrix.test.ts',
+  'audit/matrix-pdf.txt': 'audit/matrix.test.ts',
+  'audit/matrix-png.txt': 'audit/matrix.test.ts',
+  'audit/matrix.json': 'audit/matrix.test.ts',
+  'audit/parsers.txt': 'audit/parsers.test.ts',
+  'audit/review-attacks.txt': 'audit/review-attacks.test.ts',
+  'audit/sabotage-notes.txt': 'audit/sabotage.test.ts',
+  'audit/segments-jpeg.txt': 'audit/matrix.test.ts',
+  'audit/ui-notes.txt': 'audit/ui.test.tsx',
+};
