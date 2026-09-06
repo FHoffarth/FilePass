@@ -1,0 +1,3 @@
+audit/*.txt text eol=lf
+audit/matrix.json text eol=lf
+audit/*.md text eol=lf

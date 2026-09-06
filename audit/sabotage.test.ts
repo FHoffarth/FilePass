@@ -4,7 +4,7 @@ import zlib from 'node:zlib';
 import { inspectFile, verifyClean, cleanAndVerify } from '../src/core/pipeline';
 import { MAX_BYTES, sniffFormat } from '../src/core/sniff';
 import { FileTooLargeError, MalformedFileError, UnsupportedFileError } from '../src/core/types';
-import { fixture } from './harness';
+import { fixture, measurement } from './harness';
 
 const notes: string[] = [];
 const note = (line: string) => notes.push(line);
@@ -209,11 +209,14 @@ describe('phase 12: size and resource limits', () => {
     try {
       const report = await inspectFile(hostile);
       const finding = report.findings.find((f) => f.key.includes('bomb'));
-      result = `parsed in ${Date.now() - started} ms, finding value length ${finding?.value.length}, file ${hostile.length} bytes`;
+      result = `parsed, finding value length ${finding?.value.length}, file ${hostile.length} bytes`;
     } catch (error) {
-      result = `refused after ${Date.now() - started} ms: ${(error as Error).message}`;
+      result = `refused: ${(error as Error).message}`;
     }
     appendFileSync('audit/sabotage-notes.txt', `bomb: ${result}\n`);
+    // How long it took is a fact about this machine, not about FilePass, so it stays out of
+    // the tracked note: a number that changes on every run makes the evidence file change too.
+    measurement(`bomb (40 MB declared): ${result.split(':')[0]} after ${Date.now() - started} ms`);
     expect(result.length).toBeGreaterThan(0);
   }, 120000);
 });

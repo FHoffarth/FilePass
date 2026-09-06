@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { appendFileSync } from 'node:fs';
 import zlib from 'node:zlib';
 import { inspectFile } from '../src/core/pipeline';
 import { readChunks } from '../src/core/png';
 import { MalformedFileError } from '../src/core/types';
-import { fixture, runBytes as run } from './harness';
+import { fixture, measurement, runBytes as run } from './harness';
 
 const crc = (buf: Buffer) => {
   let c = ~0;
@@ -73,9 +72,11 @@ describe('phase 12: what a file may ask FilePass to unpack', () => {
     const before = process.memoryUsage().heapUsed;
     let outcome = 'parsed';
     try { await inspectFile(hostile); } catch (error) { outcome = (error as Error).constructor.name; }
-    appendFileSync('audit/sabotage-notes.txt',
-      `bomb x10 (~200 MB declared): ${outcome} after ${Date.now() - started} ms, `
-      + `heap delta ${((process.memoryUsage().heapUsed - before) / 1e6).toFixed(0)} MB, file ${(hostile.length / 1024).toFixed(0)} KB\n`);
+    // Not a tracked note either: this file is owned by sabotage.test.ts, and appending to a
+    // file another test truncates makes the result depend on which of the two ran last.
+    measurement(`bomb x10 (~200 MB declared): ${outcome} after ${Date.now() - started} ms, `
+      + `heap delta ${((process.memoryUsage().heapUsed - before) / 1e6).toFixed(0)} MB, `
+      + `file ${(hostile.length / 1024).toFixed(0)} KB`);
     expect(outcome).toBe('MalformedFileError');
   }, 120000);
 });
