@@ -1,0 +1,17 @@
+r_annot_xmp.pdf | findings=4 | verdict=verified | download=YES | canary in output=gone
+r_annot_xmp_flate.pdf | findings=3 | verdict=verified | download=YES | canary in output=gone
+  compressed XMP still an object in the output: false
+  /Subtype /XML present in output: false
+r_catalog_pieceinfo.pdf | findings=3 | verdict=verified | download=YES | canary in output=gone
+r_hex_info.pdf | findings=2 | verdict=verified | download=YES | canary in output=gone
+  findings: ["DOCUMENT/Title","IDENTITY/Author"]
+j_padded_dqt.jpg | findings=- | verdict=error | download=no | canary in output=gone
+  segments: refused at parse time (This JPEG file is damaged and cannot be read safely.)
+j_padded_sos.jpg | findings=3 | verdict=verified | download=YES | canary in output=gone
+p_iccp_name.png | findings=3 | verdict=verified | download=YES | canary in output=gone
+  chunks after: IHDR iCCP IDAT IEND
+p_unknown_critical.png | findings=1 | verdict=verified | chunks after: IHDR IDAT IEND
+r_reachable_only_via_annot.pdf | pages=1 | verdict=verified
+  XObject image kept: true | appearance stream kept: true | annotation kept: true
+  visible text: "Quarterly numbers, page one"
+j_icc_canary.jpg | findings=9 | verdict=verified | download=true | canary in output=gone

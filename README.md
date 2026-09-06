@@ -44,9 +44,19 @@ names to what it already found. A container FilePass cannot decode is still list
 
 Image pixel data is copied byte for byte; nothing is re-encoded or re-compressed. Kept on
 purpose because they are rendering data, not privacy data: JFIF and ICC segments, Adobe colour
-markers, PNG `tRNS`, `iCCP`, `gAMA`, `sRGB`, `pHYs` and the APNG animation chunks. EXIF
-orientation is a special case — dropping it silently rotates people's photos, so FilePass writes
-back a minimal EXIF block containing the orientation tag and nothing else, and says so.
+markers, PNG `tRNS`, `iCCP`, `gAMA`, `sRGB`, `pHYs` and the APNG animation chunks. Each retained
+structure has to account for its own bytes: anything a segment or chunk declares beyond the shape
+its format defines is reported and removed, and a structure that appears more often than the
+format allows is refused rather than guessed at.
+
+Two things inside those retained structures are not simply kept. A colour profile is disclosed
+as retained — you are told it is there and how large it is — and its free-text name, which no
+renderer reads, is replaced with a plain label. A JFIF thumbnail is a second picture that can
+show what the image looked like before it was edited, so it is reported and removed while the
+JFIF segment itself stays valid.
+
+EXIF orientation is a special case — dropping it silently rotates people's photos, so FilePass
+writes back a minimal EXIF block containing the orientation tag and nothing else, and says so.
 
 PDF pages, text and images are carried across by pdf-lib. Earlier incremental revisions inside
 the file are dropped when the clean copy is written.
@@ -54,15 +64,32 @@ the file are dropped when the clean copy is written.
 ## What fails closed
 
 Digitally signed PDFs (rewriting would invalidate the signature), password-protected PDFs,
-malformed or truncated files, empty files, unsupported formats and files above 50 MB. Each one
-gets an explanation, not a cleaned file. The extension is never trusted: format comes from the
-magic bytes.
+malformed or truncated files, empty files, unsupported formats and files above 50 MB. So do
+PDFs that FilePass's two readers cannot agree about, images carrying more copies of a structure
+than the format permits, and colour profiles that do not hold up as profiles. Each one gets an
+explanation, not a cleaned file. The extension is never trusted: format comes from the magic
+bytes.
 
 ## What FilePass does not do
 
 It does not read or remove personal information that is visible inside the document or image,
 and it never claims to. Wording such as "100% anonymous" or "all personal information removed"
 is asserted against in the test suite.
+
+Two further limits are worth stating plainly, because they are choices rather than oversights.
+A colour profile is kept so the picture still looks right, and FilePass checks that it really is
+a profile — but it does not read what is inside it, so bytes carried within a structurally valid
+profile stay in the file. The same applies to the handful of fields that exist to render an
+image, such as resolution and pixel dimensions: their values are whatever the file says they
+are, and keeping them means keeping those values. FilePass tells you a profile was kept; it does
+not promise that nothing can hide inside one.
+
+## What FilePass refuses to spend
+
+Compressed text inside a PNG is unpacked with a ceiling: one megabyte per chunk and eight
+megabytes for a whole file. A file that wants more than that is refused rather than unpacked,
+because text metadata is small in every real image and a small file should not be able to claim
+unbounded memory. That is a limit FilePass sets for itself, not something the PNG format says.
 
 ## Fixtures
 

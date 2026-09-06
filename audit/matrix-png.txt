@@ -1,0 +1,10 @@
+dirty.png | png | 15 | verified | YES
+clean.png | png | 0 | verified | YES
+p_full.png | png | 16 | verified | YES
+p_text_after_idat.png | png | 14 | verified | YES
+p_unknown_chunk.png | png | 1 | verified | YES
+p_trailing.png | png | 14 | verified | YES
+p_palette_trns.png | png | 14 | verified | YES
+p_apng.png | png | 14 | verified | YES
+p_bad_length.png | - | - | error | no | This PNG file is damaged and cannot be read safely.
+p_truncated.png | - | - | error | no | This PNG file ends unexpectedly.

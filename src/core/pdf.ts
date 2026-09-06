@@ -1,5 +1,6 @@
-import { PDFDict, PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef } from 'pdf-lib';
 import { Category, CleanResult, Finding, InspectionReport, MalformedFileError } from './types';
+import { independentPdfParse } from './verify-pdf';
 
 /** Info dictionary keys FilePass understands. Unknown keys are still reported, as OTHER. */
 const INFO_KEYS: Record<string, { label: string; category: Category }> = {
@@ -13,6 +14,72 @@ const INFO_KEYS: Record<string, { label: string; category: Category }> = {
   CreationDate: { label: 'Created', category: 'TIME' },
   ModDate: { label: 'Modified', category: 'TIME' },
 };
+
+/**
+ * Annotation entries that describe who made a comment and when. Removing them does not
+ * change what a reader sees: the note text (/Contents, /RC) and the appearance stream stay.
+ */
+const ANNOT_KEYS: Record<string, { label: string; category: Category }> = {
+  T: { label: 'Comment author', category: 'IDENTITY' },
+  M: { label: 'Comment modified', category: 'TIME' },
+  CreationDate: { label: 'Comment created', category: 'TIME' },
+  NM: { label: 'Comment identifier', category: 'OTHER' },
+};
+
+/**
+ * Every node of the reachable page tree above the leaves. Metadata can hang off the root
+ * /Pages node or any node between it and a page, and those are as reachable as the pages.
+ * A node that is not a dictionary is a tree FilePass will not walk; a repeated reference is
+ * visited once, so a cycle terminates instead of looping.
+ */
+function pageTreeNodes(doc: PDFDocument): { index: number; dict: PDFDict }[] {
+  const out: { index: number; dict: PDFDict }[] = [];
+  const seen = new Set<string>();
+  const queue: unknown[] = [doc.catalog.get(PDFName.of('Pages'))];
+
+  while (queue.length > 0) {
+    const entry = queue.shift();
+    if (!entry) continue;
+    let node: unknown = entry;
+    if (entry instanceof PDFRef) {
+      if (seen.has(entry.tag)) continue;
+      seen.add(entry.tag);
+      node = doc.context.lookup(entry);
+    }
+    if (!(node instanceof PDFDict)) {
+      throw new MalformedFileError('The page structure of this PDF could not be followed, so FilePass will not change it.');
+    }
+    if (node.get(PDFName.of('Type'))?.toString() === '/Page') continue;   // leaves are handled separately
+    out.push({ index: out.length, dict: node });
+    const kids = node.get(PDFName.of('Kids'));
+    if (!kids) continue;
+    const array = doc.context.lookup(kids);
+    if (!(array instanceof PDFArray)) {
+      throw new MalformedFileError('The page structure of this PDF could not be followed, so FilePass will not change it.');
+    }
+    for (let i = 0; i < array.size(); i++) queue.push(array.get(i));
+  }
+  return out;
+}
+
+function annotationDicts(doc: PDFDocument): { page: number; index: number; dict: PDFDict }[] {
+  const out: { page: number; index: number; dict: PDFDict }[] = [];
+  doc.getPages().forEach((page, pageIndex) => {
+    const annots = page.node.get(PDFName.of('Annots'));
+    if (!annots) return;
+    const array = doc.context.lookup(annots);
+    if (!(array instanceof PDFArray)) return;
+    for (let i = 0; i < array.size(); i++) {
+      const dict = doc.context.lookup(array.get(i));
+      if (!(dict instanceof PDFDict)) continue;
+      // Widgets are form fields: their /T is the field name the document depends on,
+      // not the name of a person, and removing it would break the form.
+      if (dict.get(PDFName.of('Subtype'))?.toString() === '/Widget') continue;
+      out.push({ page: pageIndex, index: i, dict });
+    }
+  });
+  return out;
+}
 
 async function load(bytes: Uint8Array): Promise<PDFDocument> {
   try {
@@ -93,6 +160,7 @@ async function inspectDocument(bytes: Uint8Array): Promise<InspectionReport> {
         category: known?.category ?? 'OTHER',
         label: known?.label ?? name,
         value: /^D:\d{4}/.test(raw) ? readableDate(raw) : raw,
+        rawValue: raw,
         container: 'Info',
         key: name,
         removable: true,
@@ -113,6 +181,43 @@ async function inspectDocument(bytes: Uint8Array): Promise<InspectionReport> {
     });
   }
 
+  for (const { index, dict } of pageTreeNodes(doc)) {
+    if (dict.get(PDFName.of('Metadata'))) {
+      findings.push({
+        id: `PageTreeXMP#${index}`,
+        category: 'OTHER',
+        label: index === 0 ? 'XMP metadata on the page list' : `XMP metadata on a page group (${index})`,
+        value: 'Extra metadata attached to the structure that holds the pages',
+        container: 'PageTreeXMP',
+        key: String(index),
+        removable: true,
+      });
+    }
+    if (dict.get(PDFName.of('PieceInfo'))) {
+      findings.push({
+        id: `PageTreePieceInfo#${index}`,
+        category: 'OTHER',
+        label: index === 0 ? 'Editing data on the page list' : `Editing data on a page group (${index})`,
+        value: 'Private data left behind by the program that made this file',
+        container: 'PageTreePieceInfo',
+        key: String(index),
+        removable: true,
+      });
+    }
+  }
+
+  if (doc.catalog.get(PDFName.of('PieceInfo'))) {
+    findings.push({
+      id: 'PieceInfo#catalog',
+      category: 'OTHER',
+      label: 'Editing data on the document',
+      value: 'Private data left behind by the program that made this file',
+      container: 'PieceInfo',
+      key: 'catalog',
+      removable: true,
+    });
+  }
+
   doc.getPages().forEach((page, index) => {
     if (page.node.get(PDFName.of('Metadata'))) {
       findings.push({
@@ -128,6 +233,40 @@ async function inspectDocument(bytes: Uint8Array): Promise<InspectionReport> {
     }
   });
 
+  for (const { page, index, dict } of annotationDicts(doc)) {
+    for (const [name, known] of Object.entries(ANNOT_KEYS)) {
+      const value = dict.get(PDFName.of(name));
+      if (!value) continue;
+      const raw = stripParens(value.toString());
+      if (!raw.trim()) continue;
+      findings.push({
+        id: `Annots#${page}:${index}:${name}`,
+        category: known.category,
+        label: `${known.label} (page ${page + 1})`,
+        value: /^D:\d{4}/.test(raw) ? readableDate(raw) : raw,
+        rawValue: raw,
+        container: 'Annots',
+        key: `${page}:${index}:${name}`,
+        removable: true,
+      });
+    }
+  }
+  for (const { page, index, dict } of annotationDicts(doc)) {
+    if (!dict.get(PDFName.of('Metadata'))) continue;
+    findings.push({
+      id: `AnnotXMP#${page}:${index}`,
+      category: 'OTHER',
+      label: `XMP metadata on a comment (page ${page + 1})`,
+      value: 'Extra metadata attached to a comment, which often names its author or tool',
+      container: 'AnnotXMP',
+      key: `${page}:${index}`,
+      removable: true,
+    });
+  }
+  if (annotationDicts(doc).length > 0) {
+    notes.push('Comment text stays in the document. Only the name and dates attached to comments are removed.');
+  }
+
   const signature = signatureBlock(doc);
   const report: InspectionReport = { format: 'pdf', byteLength: bytes.length, findings, notes };
   if (signature) {
@@ -135,9 +274,21 @@ async function inspectDocument(bytes: Uint8Array): Promise<InspectionReport> {
       reason: 'This PDF is digitally signed.',
       detail: 'Removing metadata rewrites the file, which would break the signature and make the document look altered. FilePass will not do that.',
     };
-  } else {
-    notes.push('Pages, text and images are copied across unchanged.');
+    return report;
   }
+
+  // A file only one parser can make sense of has been repaired, not understood. What the
+  // list above says about it cannot be trusted, so FilePass says so instead of cleaning it.
+  const second = await independentPdfParse(bytes);
+  if (!second.ok) {
+    report.blocked = {
+      reason: 'This PDF could not be read the same way twice.',
+      detail: 'FilePass checks every PDF with two separate readers. One of them could not open this file, so FilePass cannot tell you what is inside it or promise that a cleaned copy would be complete.',
+    };
+    return report;
+  }
+
+  notes.push('Pages, text and images are copied across unchanged.');
   return report;
 }
 
@@ -161,10 +312,31 @@ export async function clean(bytes: Uint8Array, report: InspectionReport): Promis
     removedContainers.add('XMP');
   }
 
+  if (doc.catalog.get(PDFName.of('PieceInfo'))) {
+    doc.catalog.delete(PDFName.of('PieceInfo'));
+    removedContainers.add('PieceInfo');
+  }
+
+  for (const { dict } of pageTreeNodes(doc)) {
+    if (dict.get(PDFName.of('Metadata'))) { dict.delete(PDFName.of('Metadata')); removedContainers.add('PageTreeXMP'); }
+    if (dict.get(PDFName.of('PieceInfo'))) { dict.delete(PDFName.of('PieceInfo')); removedContainers.add('PageTreePieceInfo'); }
+  }
+
   for (const page of doc.getPages()) {
     if (page.node.get(PDFName.of('Metadata'))) { page.node.delete(PDFName.of('Metadata')); removedContainers.add('PageXMP'); }
     if (page.node.get(PDFName.of('PieceInfo'))) { page.node.delete(PDFName.of('PieceInfo')); removedContainers.add('PieceInfo'); }
   }
+
+  for (const { dict } of annotationDicts(doc)) {
+    for (const name of Object.keys(ANNOT_KEYS)) {
+      if (dict.get(PDFName.of(name))) { dict.delete(PDFName.of(name)); removedContainers.add('Annots'); }
+    }
+    if (dict.get(PDFName.of('Metadata'))) { dict.delete(PDFName.of('Metadata')); removedContainers.add('AnnotXMP'); }
+  }
+
+  // Removing a reference does not remove the bytes: pdf-lib writes back every object it
+  // parsed, including ones lifted out of object streams. Drop everything unreachable.
+  const orphans = dropUnreachableObjects(doc);
 
   // useObjectStreams:false keeps the output flat, so verification can read every object back.
   const out = await doc.save({ useObjectStreams: false, updateFieldAppearances: false });
@@ -173,9 +345,44 @@ export async function clean(bytes: Uint8Array, report: InspectionReport): Promis
     .filter((f) => f.removable && removedContainers.has(f.container))
     .map((f) => f.id);
 
-  return {
-    bytes: out,
-    promisedRemovedIds,
-    notes: ['Earlier saved versions inside the file are dropped when the clean copy is written.'],
-  };
+  const notes = ['Earlier saved versions inside the file are dropped when the clean copy is written.'];
+  if (orphans > 0) {
+    notes.push(`${orphans} leftover ${orphans === 1 ? 'object' : 'objects'} that nothing in the document pointed to were dropped as well.`);
+  }
+
+  return { bytes: out, promisedRemovedIds, notes };
+}
+
+/** Deletes every indirect object that cannot be reached from the document catalog. */
+function dropUnreachableObjects(doc: PDFDocument): number {
+  const context = doc.context;
+  const reachable = new Set<string>();
+  const queue: unknown[] = [context.trailerInfo.Root, doc.catalog];
+
+  while (queue.length > 0) {
+    const node = queue.pop();
+    if (!node) continue;
+    if (node instanceof PDFRef) {
+      if (reachable.has(node.tag)) continue;
+      reachable.add(node.tag);
+      queue.push(context.lookup(node));
+      continue;
+    }
+    if (node instanceof PDFArray) {
+      for (let i = 0; i < node.size(); i++) queue.push(node.get(i));
+      continue;
+    }
+    if (node instanceof PDFDict) {
+      for (const [, value] of node.entries()) queue.push(value);
+      continue;
+    }
+    const stream = (node as { dict?: unknown }).dict;
+    if (stream instanceof PDFDict) queue.push(stream);
+  }
+
+  let dropped = 0;
+  for (const [ref] of context.enumerateIndirectObjects()) {
+    if (!reachable.has(ref.tag)) { context.delete(ref); dropped += 1; }
+  }
+  return dropped;
 }

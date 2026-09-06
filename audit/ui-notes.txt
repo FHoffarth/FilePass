@@ -1,0 +1,14 @@
+success state: drop zone absent, only "Inspect another file" resets
+after success -> reset -> signed PDF: clean
+race: displayed file = dirty.png (the second file); filename and findings consistent = true
+download name suggested for dirty.jpg: dirty-clean.jpg
+j_trailing_dirty.jpg: trailing data listed as a finding, then removed and verified
+j_com_after_sos.jpg: UI reports the post-scan comment instead of "Nothing hidden was found"
+d_multi_meta.pdf: UI reaches "Ready to share" and the orphaned XMP object is gone from the bytes
+success/refusal/error all carry a textual message; refusal and error use role=alert
+status region present with aria-live=polite
+buttons in success state: ["Download clean copy","Inspect another file"]
+focus after rejection: <button class="dropzone">
+decorative marks: ["✓"]
+storage writes during a full run: none
+localStorage keys present: ["setItem"] sessionStorage keys: ["setItem"]

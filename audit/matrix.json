@@ -1,0 +1,854 @@
+[
+ {
+  "group": "jpeg",
+  "file": "dirty.jpg",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "IDENTITY/Copyright",
+   "TIME/Captured",
+   "IDENTITY/Camera owner",
+   "LOCATION/GPS location",
+   "OTHER/XMP metadata block",
+   "DOCUMENT/Comment"
+  ],
+  "notes": [
+   "Rotation information is kept so the picture still appears the right way up."
+  ],
+  "promised": 11,
+  "removed": 11,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 1077,
+  "canaries": []
+ },
+ {
+  "group": "jpeg",
+  "file": "clean.jpg",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [],
+  "notes": [],
+  "promised": 0,
+  "removed": 0,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 1041,
+  "canaries": []
+ },
+ {
+  "group": "jpeg",
+  "file": "j_orient1.jpg",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "TIME/Captured",
+   "LOCATION/GPS location"
+  ],
+  "notes": [],
+  "promised": 7,
+  "removed": 7,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 1041,
+  "canaries": []
+ },
+ {
+  "group": "jpeg",
+  "file": "j_orient6.jpg",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "TIME/Captured",
+   "LOCATION/GPS location"
+  ],
+  "notes": [
+   "Rotation information is kept so the picture still appears the right way up."
+  ],
+  "promised": 7,
+  "removed": 7,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 1077,
+  "canaries": []
+ },
+ {
+  "group": "jpeg",
+  "file": "j_orient8.jpg",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "TIME/Captured",
+   "LOCATION/GPS location"
+  ],
+  "notes": [
+   "Rotation information is kept so the picture still appears the right way up."
+  ],
+  "promised": 7,
+  "removed": 7,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 1077,
+  "canaries": []
+ },
+ {
+  "group": "jpeg",
+  "file": "j_icc.jpg",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "TIME/Captured",
+   "LOCATION/GPS location",
+   "OTHER/Colour profile"
+  ],
+  "notes": [
+   "Rotation information is kept so the picture still appears the right way up."
+  ],
+  "promised": 7,
+  "removed": 7,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 1683,
+  "canaries": []
+ },
+ {
+  "group": "jpeg",
+  "file": "j_cmyk.jpg",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "TIME/Captured",
+   "LOCATION/GPS location"
+  ],
+  "notes": [],
+  "promised": 7,
+  "removed": 7,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 1013,
+  "canaries": []
+ },
+ {
+  "group": "jpeg",
+  "file": "j_unicode.jpg",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "TIME/Captured",
+   "LOCATION/GPS location"
+  ],
+  "notes": [],
+  "promised": 7,
+  "removed": 7,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 1041,
+  "canaries": []
+ },
+ {
+  "group": "jpeg",
+  "file": "j_script.jpg",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "TIME/Captured",
+   "LOCATION/GPS location",
+   "DOCUMENT/Comment"
+  ],
+  "notes": [],
+  "promised": 8,
+  "removed": 8,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 1041,
+  "canaries": []
+ },
+ {
+  "group": "jpeg",
+  "file": "j_multi_app1.jpg",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "OTHER/More than one block of camera data",
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "TIME/Captured",
+   "LOCATION/GPS location",
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "TIME/Captured",
+   "LOCATION/GPS location"
+  ],
+  "notes": [
+   "Rotation information is kept so the picture still appears the right way up."
+  ],
+  "promised": 15,
+  "removed": 15,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 1077,
+  "canaries": []
+ },
+ {
+  "group": "jpeg",
+  "file": "j_unknown_app.jpg",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "OTHER/APP5 metadata block"
+  ],
+  "notes": [],
+  "promised": 1,
+  "removed": 1,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 1041,
+  "canaries": []
+ },
+ {
+  "group": "jpeg",
+  "file": "j_late_exif.jpg",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "TIME/Captured",
+   "LOCATION/GPS location"
+  ],
+  "notes": [],
+  "promised": 7,
+  "removed": 7,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 1041,
+  "canaries": []
+ },
+ {
+  "group": "jpeg",
+  "file": "j_com_after_sos.jpg",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "DOCUMENT/Comment"
+  ],
+  "notes": [],
+  "promised": 1,
+  "removed": 1,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 1041,
+  "canaries": []
+ },
+ {
+  "group": "jpeg",
+  "file": "j_trailing.jpg",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "OTHER/Extra data after the end of the image"
+  ],
+  "notes": [],
+  "promised": 1,
+  "removed": 1,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 1041,
+  "canaries": []
+ },
+ {
+  "group": "jpeg",
+  "file": "j_trailing_dirty.jpg",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "TIME/Captured",
+   "LOCATION/GPS location",
+   "OTHER/Extra data after the end of the image"
+  ],
+  "notes": [
+   "Rotation information is kept so the picture still appears the right way up."
+  ],
+  "promised": 8,
+  "removed": 8,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 1077,
+  "canaries": []
+ },
+ {
+  "group": "jpeg",
+  "file": "j_truncated_app.jpg",
+  "stage": "inspect",
+  "downloadable": false,
+  "error": "This JPEG file is damaged and cannot be read safely.",
+  "errorType": "MalformedFileError"
+ },
+ {
+  "group": "jpeg",
+  "file": "j_truncated_file.jpg",
+  "stage": "inspect",
+  "downloadable": false,
+  "error": "This JPEG file is damaged and cannot be read safely.",
+  "errorType": "MalformedFileError"
+ },
+ {
+  "group": "jpeg",
+  "file": "fake.png",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "IDENTITY/Copyright",
+   "TIME/Captured",
+   "IDENTITY/Camera owner",
+   "LOCATION/GPS location",
+   "OTHER/XMP metadata block",
+   "DOCUMENT/Comment"
+  ],
+  "notes": [
+   "Rotation information is kept so the picture still appears the right way up."
+  ],
+  "promised": 11,
+  "removed": 11,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 1077,
+  "canaries": []
+ },
+ {
+  "group": "png",
+  "file": "dirty.png",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "IDENTITY/Author",
+   "DEVICE/Software",
+   "TIME/Created",
+   "OTHER/XMP metadata block",
+   "DOCUMENT/Comment",
+   "OTHER/Text entry \"zipped\"",
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "IDENTITY/Copyright",
+   "TIME/Captured",
+   "IDENTITY/Camera owner",
+   "LOCATION/GPS location"
+  ],
+  "notes": [],
+  "promised": 15,
+  "removed": 15,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 229,
+  "canaries": []
+ },
+ {
+  "group": "png",
+  "file": "clean.png",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [],
+  "notes": [],
+  "promised": 0,
+  "removed": 0,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 229,
+  "canaries": []
+ },
+ {
+  "group": "png",
+  "file": "p_full.png",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "OTHER/Colour profile name",
+   "OTHER/Colour profile",
+   "IDENTITY/Author",
+   "DEVICE/Software",
+   "DOCUMENT/Comment",
+   "OTHER/Text entry \"Secret\"",
+   "OTHER/XMP metadata block",
+   "OTHER/Text entry \"Unicode\"",
+   "TIME/Modified",
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "TIME/Captured",
+   "LOCATION/GPS location"
+  ],
+  "notes": [
+   "Transparency and colour information are kept so the picture still looks the same."
+  ],
+  "promised": 15,
+  "removed": 15,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 655,
+  "canaries": []
+ },
+ {
+  "group": "png",
+  "file": "p_text_after_idat.png",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "IDENTITY/Author",
+   "DEVICE/Software",
+   "DOCUMENT/Comment",
+   "OTHER/Text entry \"Secret\"",
+   "OTHER/XMP metadata block",
+   "OTHER/Text entry \"Unicode\"",
+   "TIME/Modified",
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "TIME/Captured",
+   "LOCATION/GPS location"
+  ],
+  "notes": [],
+  "promised": 14,
+  "removed": 14,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 229,
+  "canaries": []
+ },
+ {
+  "group": "png",
+  "file": "p_unknown_chunk.png",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "OTHER/prVt data block"
+  ],
+  "notes": [],
+  "promised": 1,
+  "removed": 1,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 229,
+  "canaries": []
+ },
+ {
+  "group": "png",
+  "file": "p_trailing.png",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "IDENTITY/Author",
+   "DEVICE/Software",
+   "DOCUMENT/Comment",
+   "OTHER/Text entry \"Secret\"",
+   "OTHER/XMP metadata block",
+   "OTHER/Text entry \"Unicode\"",
+   "TIME/Modified",
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "TIME/Captured",
+   "LOCATION/GPS location"
+  ],
+  "notes": [],
+  "promised": 14,
+  "removed": 14,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 229,
+  "canaries": []
+ },
+ {
+  "group": "png",
+  "file": "p_palette_trns.png",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "IDENTITY/Author",
+   "DEVICE/Software",
+   "DOCUMENT/Comment",
+   "OTHER/Text entry \"Secret\"",
+   "OTHER/XMP metadata block",
+   "OTHER/Text entry \"Unicode\"",
+   "TIME/Modified",
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "TIME/Captured",
+   "LOCATION/GPS location"
+  ],
+  "notes": [
+   "Transparency and colour information are kept so the picture still looks the same."
+  ],
+  "promised": 14,
+  "removed": 14,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 250,
+  "canaries": []
+ },
+ {
+  "group": "png",
+  "file": "p_apng.png",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "IDENTITY/Author",
+   "DEVICE/Software",
+   "DOCUMENT/Comment",
+   "OTHER/Text entry \"Secret\"",
+   "OTHER/XMP metadata block",
+   "OTHER/Text entry \"Unicode\"",
+   "TIME/Modified",
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "TIME/Captured",
+   "LOCATION/GPS location"
+  ],
+  "notes": [],
+  "promised": 14,
+  "removed": 14,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 513,
+  "canaries": []
+ },
+ {
+  "group": "png",
+  "file": "p_bad_length.png",
+  "stage": "inspect",
+  "downloadable": false,
+  "error": "This PNG file is damaged and cannot be read safely.",
+  "errorType": "MalformedFileError"
+ },
+ {
+  "group": "png",
+  "file": "p_truncated.png",
+  "stage": "inspect",
+  "downloadable": false,
+  "error": "This PNG file ends unexpectedly.",
+  "errorType": "MalformedFileError"
+ },
+ {
+  "group": "pdf",
+  "file": "dirty.pdf",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "DOCUMENT/Title",
+   "IDENTITY/Author",
+   "DOCUMENT/Subject",
+   "DOCUMENT/Keywords",
+   "DEVICE/Created with",
+   "DEVICE/Produced by",
+   "TIME/Created",
+   "TIME/Modified",
+   "IDENTITY/Company",
+   "OTHER/XMP metadata block"
+  ],
+  "notes": [
+   "Pages, text and images are copied across unchanged."
+  ],
+  "promised": 10,
+  "removed": 10,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 616,
+  "canaries": []
+ },
+ {
+  "group": "pdf",
+  "file": "no_metadata.pdf",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [],
+  "notes": [
+   "Pages, text and images are copied across unchanged."
+  ],
+  "promised": 0,
+  "removed": 0,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 616,
+  "canaries": []
+ },
+ {
+  "group": "pdf",
+  "file": "signed.pdf",
+  "stage": "inspect",
+  "verdict": "refused",
+  "downloadable": false,
+  "blocked": "This PDF is digitally signed.",
+  "findings": [
+   "DOCUMENT/Title",
+   "IDENTITY/Author",
+   "OTHER/XMP metadata block"
+  ],
+  "notes": []
+ },
+ {
+  "group": "pdf",
+  "file": "malformed.pdf",
+  "stage": "inspect",
+  "downloadable": false,
+  "error": "This PDF could not be read safely, so FilePass will not change it.",
+  "errorType": "MalformedFileError"
+ },
+ {
+  "group": "pdf",
+  "file": "empty.pdf",
+  "stage": "inspect",
+  "downloadable": false,
+  "error": "This file is empty.",
+  "errorType": "UnsupportedFileError"
+ },
+ {
+  "group": "pdf",
+  "file": "d_visible_only.pdf",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [],
+  "notes": [
+   "Pages, text and images are copied across unchanged."
+  ],
+  "promised": 0,
+  "removed": 0,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 627,
+  "canaries": []
+ },
+ {
+  "group": "pdf",
+  "file": "d_multi_meta.pdf",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "DOCUMENT/Title",
+   "IDENTITY/Author",
+   "DEVICE/Produced by",
+   "OTHER/XMP metadata block",
+   "OTHER/XMP metadata on page 1",
+   "OTHER/Editing data on page 1"
+  ],
+  "notes": [
+   "Pages, text and images are copied across unchanged."
+  ],
+  "promised": 6,
+  "removed": 6,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 627,
+  "canaries": []
+ },
+ {
+  "group": "pdf",
+  "file": "d_custom_keys.pdf",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "IDENTITY/Author",
+   "OTHER/XSNCoworkerName",
+   "OTHER/GTS_PDFXVersion",
+   "OTHER/SourceModified",
+   "IDENTITY/Company"
+  ],
+  "notes": [
+   "Pages, text and images are copied across unchanged."
+  ],
+  "promised": 5,
+  "removed": 5,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 627,
+  "canaries": []
+ },
+ {
+  "group": "pdf",
+  "file": "d_truncated.pdf",
+  "stage": "inspect",
+  "verdict": "refused",
+  "downloadable": false,
+  "blocked": "This PDF could not be read the same way twice.",
+  "findings": [],
+  "notes": []
+ },
+ {
+  "group": "pdf",
+  "file": "d_encrypted.pdf",
+  "stage": "inspect",
+  "downloadable": false,
+  "error": "This PDF is password protected. FilePass does not open protected files.",
+  "errorType": "MalformedFileError"
+ },
+ {
+  "group": "pdf",
+  "file": "d_leading_junk.pdf",
+  "stage": "inspect",
+  "downloadable": false,
+  "error": "FilePass v0 supports JPEG, PNG and PDF files only.",
+  "errorType": "UnsupportedFileError"
+ },
+ {
+  "group": "pdf",
+  "file": "d_trailing.pdf",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "IDENTITY/Author"
+  ],
+  "notes": [
+   "Pages, text and images are copied across unchanged."
+  ],
+  "promised": 1,
+  "removed": 1,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 497,
+  "canaries": []
+ },
+ {
+  "group": "pdf",
+  "file": "d_incremental.pdf",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "DOCUMENT/Title",
+   "IDENTITY/Author",
+   "OTHER/XMP metadata block"
+  ],
+  "notes": [
+   "Pages, text and images are copied across unchanged."
+  ],
+  "promised": 3,
+  "removed": 3,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 627,
+  "canaries": []
+ },
+ {
+  "group": "pdf",
+  "file": "d_objstm.pdf",
+  "stage": "complete",
+  "verdict": "verified",
+  "downloadable": true,
+  "findings": [
+   "DOCUMENT/Title",
+   "IDENTITY/Author",
+   "DEVICE/Produced by"
+  ],
+  "notes": [
+   "Pages, text and images are copied across unchanged."
+  ],
+  "promised": 3,
+  "removed": 3,
+  "surviving": [],
+  "introduced": [],
+  "outputBytes": 627,
+  "canaries": []
+ }
+]

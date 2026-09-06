@@ -11,6 +11,14 @@ export interface Finding {
   label: string;
   /** Plain-language value, already decoded. Rendered as text, never as HTML. */
   value: string;
+  /** The value exactly as it appears in the file, when that differs from the readable one. */
+  rawValue?: string;
+  /**
+   * Digest of the bytes a kept finding stands for. Internal, never shown: verification
+   * compares this rather than the display text, so two retained things that happen to be
+   * described identically cannot be mistaken for each other.
+   */
+  evidence?: string;
   /** Where it lives, for the details view and for verification. */
   container: string;
   /** Raw key inside that container, e.g. "ifd0:315" or "tEXt:Author". */
@@ -55,6 +63,8 @@ export interface VerificationResult {
   introducedFindings: Finding[];
   /** Present in source and output, never promised (kept on purpose or not removable). */
   remainingFindings: Finding[];
+  /** Disclosed as kept in the source, but no longer present in the output. */
+  missingRetained: Finding[];
   outputReport: InspectionReport;
 }
 

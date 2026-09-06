@@ -96,14 +96,3 @@ export async function decodeTags(bytes: Uint8Array): Promise<DecodedTag[]> {
 
   return out;
 }
-
-/** Orientation drives how the image is displayed; FilePass preserves it rather than rotating photos. */
-export async function readOrientation(bytes: Uint8Array): Promise<number | undefined> {
-  try {
-    const parsed: any = await exifr.parse(bytes as any, { ifd0: [0x0112], mergeOutput: false, translateKeys: false, translateValues: false } as any);
-    const v = parsed?.ifd0?.['274'];
-    return typeof v === 'number' ? v : undefined;
-  } catch {
-    return undefined;
-  }
-}

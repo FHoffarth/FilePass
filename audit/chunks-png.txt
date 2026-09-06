@@ -1,0 +1,30 @@
+dirty.png
+  before: IHDR, tEXt, tEXt, tEXt, iTXt, iTXt, zTXt, eXIf, IDAT, IEND
+  after:  IHDR, IDAT, IEND
+clean.png
+  before: IHDR, IDAT, IEND
+  after:  IHDR, IDAT, IEND
+p_full.png
+  before: IHDR, gAMA, sRGB, pHYs, iCCP, tEXt, tEXt, tEXt, zTXt, iTXt, iTXt, tIME, eXIf, IDAT, IEND
+  after:  IHDR, gAMA, sRGB, pHYs, iCCP, IDAT, IEND
+p_text_after_idat.png
+  before: IHDR, IDAT, tEXt, tEXt, tEXt, zTXt, iTXt, iTXt, tIME, eXIf, IEND
+  after:  IHDR, IDAT, IEND
+p_unknown_chunk.png
+  before: IHDR, prVt, IDAT, IEND
+  after:  IHDR, IDAT, IEND
+p_trailing.png
+  before: IHDR, tEXt, tEXt, tEXt, zTXt, iTXt, iTXt, tIME, eXIf, IDAT, IEND
+  after:  IHDR, IDAT, IEND
+p_palette_trns.png
+  before: IHDR, PLTE, tRNS, tEXt, tEXt, tEXt, zTXt, iTXt, iTXt, tIME, eXIf, IDAT, IEND
+  after:  IHDR, PLTE, tRNS, IDAT, IEND
+p_apng.png
+  before: IHDR, acTL, tEXt, tEXt, tEXt, zTXt, iTXt, iTXt, tIME, eXIf, fcTL, IDAT, fcTL, fdAT, IEND
+  after:  IHDR, acTL, fcTL, IDAT, fcTL, fdAT, IEND
+p_bad_length.png
+  before: ERR
+  after:  -
+p_truncated.png
+  before: ERR
+  after:  -
