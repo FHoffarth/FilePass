@@ -93,19 +93,20 @@ than either. A file that wants more than that is refused rather than unpacked, b
 is small in every real image and a small file should not be able to claim unbounded memory.
 Those are limits FilePass sets for itself, not something the PNG format says.
 
-PDFs have no such ceiling, and the gap is real rather than theoretical. FilePass unpacks nothing
-in a PDF itself: `pdf-lib` and `pdfjs-dist` do it while they parse, and some of it happens before
-FilePass has seen enough of the file to have an opinion about it. A small PDF can therefore buy
-a lot of work. A one megabyte file whose metadata is compressed around a thousand to one expands
-to roughly a gigabyte and takes the better part of a minute. The 50 MB limit above is a limit on
-the file as it arrives, not on what it turns into.
+FilePass has no corresponding decompression ceiling for the PDF paths it uses today, and the gap
+is real rather than theoretical. It unpacks nothing in a PDF itself: `pdf-lib` and `pdfjs-dist` do
+it while they parse, and some of it happens before FilePass has seen enough of the file to have an
+opinion about it. A small PDF can therefore buy a lot of work. A one megabyte file whose metadata
+is compressed around a thousand to one expands to roughly a gigabyte and takes the better part of
+a minute. The 50 MB limit above is a limit on the file as it arrives, not on what it turns into.
 
-What that costs was measured rather than assumed, and the measurement is the reason it is
-accepted here. The file is still read correctly and the cleaned copy is still verified honestly.
-The page does not freeze, the tab does not fall over, and no verdict changes. What it spends is
-time and memory on your own device. This version says so instead of implying a ceiling that is
-not there; bounding it properly would mean changing how the two parsers are driven, and that is
-not a change to make quietly beside a release.
+What that costs was measured rather than assumed, and the measurement is the reason it is accepted
+here. In the measured browser cases, up to a 1 GiB expanded payload, the file was still read
+correctly and the cleaned copy was still verified honestly. The page did not freeze, the tab did
+not fall over, and no verdict changed. What it spends is time and memory on your own device. This
+version says so instead of implying a ceiling that is not there; bounding it properly would mean
+changing how the two parsers are driven, and that is not a change to make quietly beside a
+release.
 
 ## Fixtures
 
