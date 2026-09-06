@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { cleanAndVerify, inspectFile } from '../src/core/pipeline';
 import { InspectionReport, VerificationResult } from '../src/core/types';
@@ -109,3 +109,15 @@ export const row = (o: Outcome) =>
     o.downloadable ? 'YES' : 'no',
     o.error ?? o.blocked ?? '',
   ].join(' | ').replace(/ \| $/, '');   // no dangling separator when there is no message
+
+/**
+ * How long a run took and how much heap it cost is a fact about the machine that ran it, not
+ * about FilePass. Recording it next to the evidence made the suite rewrite a tracked file on
+ * every run, which is exactly the kind of unexplained change the evidence chain exists to
+ * catch. Measurements go to an untracked run directory instead; the tracked notes keep the
+ * outcome, which is reproducible.
+ */
+export function measurement(line: string): void {
+  mkdirSync('audit/run', { recursive: true });
+  appendFileSync('audit/run/measurements.txt', line + '\n');
+}
