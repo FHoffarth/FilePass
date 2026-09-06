@@ -14,4 +14,3 @@ p_unknown_critical.png | findings=1 | verdict=verified | chunks after: IHDR IDAT
 r_reachable_only_via_annot.pdf | pages=1 | verdict=verified
   XObject image kept: true | appearance stream kept: true | annotation kept: true
   visible text: "Quarterly numbers, page one"
-j_icc_canary.jpg | findings=9 | verdict=verified | download=true | canary in output=gone

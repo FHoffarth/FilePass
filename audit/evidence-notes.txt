@@ -22,7 +22,3 @@ d_visible_only.pdf: pages 1 -> 1, text "Contact Alice Smith on 0170 5551234"
 d_truncated.pdf verdict=refused findings=0 downloadable=false
 PNG trailing data dropped by the chunk rebuild
 d_incremental.pdf findings=["DOCUMENT/Title","IDENTITY/Author","OTHER/XMP metadata block"] verdict=verified
-d_annotation.pdf findings=["IDENTITY/Comment author (page 1)","TIME/Comment modified (page 1)","OTHER/Comment identifier (page 1)"] verdict=verified canaryInSource=true canaryInOutput=false
-d_annot_plus_info.pdf findings=["DOCUMENT/Title","IDENTITY/Author","DEVICE/Produced by","IDENTITY/Comment author (page 1)","TIME/Comment modified (page 1)"] verdict=verified downloadable=true canaryInOutput=false
-j_progressive.jpg: scans=10 findings=3 verdict=verified
-j_restart.jpg: scans=1 findings=3 verdict=verified
