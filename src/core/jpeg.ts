@@ -308,6 +308,21 @@ export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
     assessment.status === 'valid' && assessment.orientation !== undefined ? [assessment.orientation] : []));
   const conflictingOrientations = orientations.size > 1;
 
+  // EXIF allows one block. More than one is not something FilePass has to choose between,
+  // because cleaning removes them all - but a file carrying several is carrying something,
+  // and saying nothing would leave the user with no reason to make a clean copy.
+  if (exif.size > 1) {
+    findings.push({
+      id: 'APP1/EXIF#count',
+      category: 'OTHER',
+      label: 'More than one block of camera data',
+      value: `${exif.size} separate EXIF blocks, where this format allows one`,
+      container: 'APP1/EXIF',
+      key: 'count',
+      removable: true,
+    });
+  }
+
   for (const [start, { decoded }] of exif) {
     for (const tag of decoded) {
       findings.push({

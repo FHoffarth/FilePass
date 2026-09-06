@@ -37,28 +37,44 @@ export default function App() {
   const [outputName, setOutputName] = useState('');
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dropRef = useRef<HTMLButtonElement>(null);
   const downloadRef = useRef<string | null>(null);
+  /**
+   * Which run the screen belongs to. Reading a file, cleaning it and verifying it are all
+   * asynchronous, so a second file - or a reset - can arrive while the first is still going.
+   * Whatever finishes for an older run is no longer about the file in front of the user.
+   */
+  const runRef = useRef(0);
 
   const handleFile = useCallback(async (file: File) => {
+    const run = ++runRef.current;
     setStage({ name: 'working', message: `Looking inside ${file.name}` });
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const report = await inspectFile(bytes);
+      if (runRef.current !== run) return;
       setOutputName(cleanedName(suggestFilename(file.name)));
       setStage({ name: 'inspected', report, file: { name: file.name, bytes } });
     } catch (error) {
+      if (runRef.current !== run) return;
       setStage({ name: 'error', message: error instanceof Error ? error.message : 'This file could not be read.' });
+      // a keyboard user should be able to pick another file straight away
+      queueMicrotask(() => dropRef.current?.focus());
     }
   }, []);
 
   const onClean = useCallback(async () => {
     if (stage.name !== 'inspected') return;
+    const run = ++runRef.current;
     setStage({ name: 'working', message: 'Making a clean copy and checking it' });
     try {
-      const run = await cleanAndVerify(stage.file.bytes, stage.report);
-      setStage({ name: 'done', report: stage.report, file: stage.file, run });
+      const cleaned = await cleanAndVerify(stage.file.bytes, stage.report);
+      if (runRef.current !== run) return;
+      setStage({ name: 'done', report: stage.report, file: stage.file, run: cleaned });
     } catch (error) {
+      if (runRef.current !== run) return;
       setStage({ name: 'error', message: error instanceof Error ? error.message : 'The clean copy could not be made.' });
+      queueMicrotask(() => dropRef.current?.focus());
     }
   }, [stage]);
 
@@ -75,6 +91,7 @@ export default function App() {
   }, [stage, outputName]);
 
   const reset = () => {
+    runRef.current += 1;              // anything still running belongs to a file that is gone
     if (downloadRef.current) {
       URL.revokeObjectURL(downloadRef.current);   // the cleaned copy should not outlive the session
       downloadRef.current = null;
@@ -98,6 +115,7 @@ export default function App() {
         <section>
           <button
             type="button"
+            ref={dropRef}
             className={`dropzone${dragging ? ' dropzone--over' : ''}`}
             onClick={() => inputRef.current?.click()}
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}

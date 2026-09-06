@@ -43,9 +43,15 @@ export interface Outcome {
 
 /** Runs the exact product pipeline a user would trigger, and records where it stopped. */
 export async function run(file: string): Promise<Outcome> {
+  return runBytes(fixture(file), file);
+}
+
+/** The same, for bytes a test builds rather than a fixture on disk. */
+export async function runBytes(bytes: Uint8Array, file = '(in memory)'): Promise<Outcome> {
+  const source = () => bytes;
   let report: InspectionReport;
   try {
-    report = await inspectFile(fixture(file));
+    report = await inspectFile(source());
   } catch (error) {
     return {
       file, ok: false, stage: 'inspect', downloadable: false,
@@ -68,7 +74,7 @@ export async function run(file: string): Promise<Outcome> {
   }
 
   try {
-    const { cleaned, verification } = await cleanAndVerify(fixture(file), report);
+    const { cleaned, verification } = await cleanAndVerify(source(), report);
     return {
       ...base,
       ok: true,
@@ -102,4 +108,4 @@ export const row = (o: Outcome) =>
     o.verdict ?? (o.error ? 'error' : '-'),
     o.downloadable ? 'YES' : 'no',
     o.error ?? o.blocked ?? '',
-  ].join(' | ');
+  ].join(' | ').replace(/ \| $/, '');   // no dangling separator when there is no message

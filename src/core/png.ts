@@ -55,24 +55,76 @@ const KEYWORD_MAP: Record<string, { label: string; category: Category }> = {
 
 const utf8 = (b: Uint8Array) => new TextDecoder('utf-8', { fatal: false }).decode(b);
 
-async function inflate(data: Uint8Array): Promise<Uint8Array | undefined> {
-  if (typeof DecompressionStream === 'undefined') return undefined;
+/**
+ * Inflates with a ceiling, stopping the stream the moment it goes over rather than measuring
+ * afterwards. The three outcomes are kept apart on purpose: running past the ceiling is a
+ * property of the file and FilePass refuses it, while a stream it cannot read at all - broken
+ * data, or a browser without a decompressor - is reported instead, since the chunk is removed
+ * either way.
+ */
+type Inflated =
+  | { status: 'ok'; bytes: Uint8Array }
+  | { status: 'overflow' }
+  | { status: 'unreadable' };
+
+async function inflateBounded(data: Uint8Array, limit: number): Promise<Inflated> {
+  if (typeof DecompressionStream === 'undefined') return { status: 'unreadable' };
   try {
     const stream = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate'));
-    return new Uint8Array(await new Response(stream).arrayBuffer());
+    const reader = stream.getReader();
+    const parts: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      if (total > limit) { await reader.cancel(); return { status: 'overflow' }; }
+      parts.push(value);
+    }
+    return { status: 'ok', bytes: concat(parts) };
   } catch {
-    return undefined;
+    return { status: 'unreadable' };
   }
 }
 
+/**
+ * What FilePass is willing to unpack from one text chunk, and from a whole file. Compressed
+ * text metadata is small in every real image; these are product limits chosen so a file
+ * cannot make FilePass spend unbounded memory, not a rule the PNG format states.
+ */
+const MAX_TEXT_BYTES = 1024 * 1024;
+const MAX_TEXT_BUDGET = 8 * 1024 * 1024;
+
+/** Raised when a file asks FilePass to unpack more than it is willing to. */
+class TextBudget {
+  private spent = 0;
+
+  spend(amount: number): void {
+    this.spent += amount;
+    if (this.spent > MAX_TEXT_BUDGET) {
+      throw new MalformedFileError('The text in this image unpacks to more than FilePass will read, so it will not vouch for it.');
+    }
+  }
+}
+
+async function inflate(data: Uint8Array, budget: TextBudget): Promise<Uint8Array | undefined> {
+  const unpacked = await inflateBounded(data, MAX_TEXT_BYTES);
+  if (unpacked.status === 'overflow') {
+    throw new MalformedFileError('The text in this image unpacks to more than FilePass will read, so it will not vouch for it.');
+  }
+  if (unpacked.status === 'unreadable') return undefined;
+  budget.spend(unpacked.bytes.length);
+  return unpacked.bytes;
+}
+
 /** Reads keyword and text out of a tEXt / zTXt / iTXt chunk. Values may be untrusted text. */
-async function readTextChunk(chunk: Chunk): Promise<{ keyword: string; text: string }> {
+async function readTextChunk(chunk: Chunk, budget: TextBudget): Promise<{ keyword: string; text: string }> {
   const nul = chunk.data.indexOf(0);
   const keyword = utf8(chunk.data.subarray(0, nul < 0 ? chunk.data.length : nul));
   const rest = chunk.data.subarray(nul + 1);
   if (chunk.type === 'tEXt') return { keyword, text: utf8(rest) };
   if (chunk.type === 'zTXt') {
-    const inflated = await inflate(rest.subarray(1));
+    const inflated = await inflate(rest.subarray(1), budget);
     return { keyword, text: inflated ? utf8(inflated) : 'compressed text FilePass can remove but did not decode' };
   }
   // iTXt: compression flag, compression method, language tag, translated keyword, then text.
@@ -81,7 +133,7 @@ async function readTextChunk(chunk: Chunk): Promise<{ keyword: string; text: str
   for (let seen = 0; seen < 2 && cursor < rest.length; cursor++) if (rest[cursor] === 0) seen++;
   const body = rest.subarray(cursor);
   if (!compressed) return { keyword, text: utf8(body) };
-  const inflated = await inflate(body);
+  const inflated = await inflate(body, budget);
   return { keyword, text: inflated ? utf8(inflated) : 'compressed text FilePass can remove but did not decode' };
 }
 
@@ -254,34 +306,14 @@ function assertChunkCardinality(chunks: Chunk[]): void {
   }
 }
 
-/** Inflates with a ceiling, so a small chunk cannot claim an unbounded amount of memory. */
-async function inflateBounded(data: Uint8Array, limit: number): Promise<Uint8Array | undefined> {
-  if (typeof DecompressionStream === 'undefined') return undefined;
-  try {
-    const stream = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate'));
-    const reader = stream.getReader();
-    const parts: Uint8Array[] = [];
-    let total = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.length;
-      if (total > limit) { await reader.cancel(); return undefined; }
-      parts.push(value);
-    }
-    return concat(parts);
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * Enough structure to justify calling the retained bytes a colour profile: it has to unpack,
  * be large enough to hold an ICC header, agree with its own declared size, and carry the
  * ICC signature. This is a validity check for the claim FilePass makes, not colour management.
  */
 async function profileBytes(rest: Uint8Array): Promise<Uint8Array> {
-  const profile = await inflateBounded(rest.subarray(1), MAX_PROFILE_BYTES);
+  const unpacked = await inflateBounded(rest.subarray(1), MAX_PROFILE_BYTES);
+  const profile = unpacked.status === 'ok' ? unpacked.bytes : undefined;
   if (!profile) {
     throw new MalformedFileError('The colour profile in this image could not be unpacked, so FilePass will not vouch for it.');
   }
@@ -325,6 +357,7 @@ export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
   assertRetainedChunkShapes(chunks);
   const findings: Finding[] = [];
   const notes: string[] = [];
+  const budget = new TextBudget();
 
   for (const chunk of chunks) {
     if (chunk.type === 'iCCP') {
@@ -362,7 +395,7 @@ export async function inspect(bytes: Uint8Array): Promise<InspectionReport> {
     const id = `${chunk.type}#offset:${chunk.start}`;
 
     if (chunk.type === 'tEXt' || chunk.type === 'zTXt' || chunk.type === 'iTXt') {
-      const { keyword, text } = await readTextChunk(chunk);
+      const { keyword, text } = await readTextChunk(chunk, budget);
       const known = KEYWORD_MAP[keyword.trim().toLowerCase()];
       const isXmp = keyword === 'XML:com.adobe.xmp';
       findings.push({
