@@ -1,18 +1,18 @@
-dirty.jpg | jpeg | 11 | verified | YES | 
-clean.jpg | jpeg | 0 | verified | YES | 
-j_orient1.jpg | jpeg | 7 | verified | YES | 
-j_orient6.jpg | jpeg | 7 | verified | YES | 
-j_orient8.jpg | jpeg | 7 | verified | YES | 
-j_icc.jpg | jpeg | 8 | verified | YES | 
-j_cmyk.jpg | jpeg | 7 | verified | YES | 
-j_unicode.jpg | jpeg | 7 | verified | YES | 
-j_script.jpg | jpeg | 8 | verified | YES | 
-j_multi_app1.jpg | jpeg | 7 | verified | YES | 
-j_unknown_app.jpg | jpeg | 1 | verified | YES | 
-j_late_exif.jpg | jpeg | 7 | verified | YES | 
-j_com_after_sos.jpg | jpeg | 1 | verified | YES | 
-j_trailing.jpg | jpeg | 1 | verified | YES | 
-j_trailing_dirty.jpg | jpeg | 8 | verified | YES | 
+dirty.jpg | jpeg | 11 | verified | YES
+clean.jpg | jpeg | 0 | verified | YES
+j_orient1.jpg | jpeg | 7 | verified | YES
+j_orient6.jpg | jpeg | 7 | verified | YES
+j_orient8.jpg | jpeg | 7 | verified | YES
+j_icc.jpg | jpeg | 8 | verified | YES
+j_cmyk.jpg | jpeg | 7 | verified | YES
+j_unicode.jpg | jpeg | 7 | verified | YES
+j_script.jpg | jpeg | 8 | verified | YES
+j_multi_app1.jpg | jpeg | 15 | verified | YES
+j_unknown_app.jpg | jpeg | 1 | verified | YES
+j_late_exif.jpg | jpeg | 7 | verified | YES
+j_com_after_sos.jpg | jpeg | 1 | verified | YES
+j_trailing.jpg | jpeg | 1 | verified | YES
+j_trailing_dirty.jpg | jpeg | 8 | verified | YES
 j_truncated_app.jpg | - | - | error | no | This JPEG file is damaged and cannot be read safely.
 j_truncated_file.jpg | - | - | error | no | This JPEG file is damaged and cannot be read safely.
-fake.png | jpeg | 11 | verified | YES | 
+fake.png | jpeg | 11 | verified | YES

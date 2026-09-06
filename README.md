@@ -76,6 +76,21 @@ It does not read or remove personal information that is visible inside the docum
 and it never claims to. Wording such as "100% anonymous" or "all personal information removed"
 is asserted against in the test suite.
 
+Two further limits are worth stating plainly, because they are choices rather than oversights.
+A colour profile is kept so the picture still looks right, and FilePass checks that it really is
+a profile — but it does not read what is inside it, so bytes carried within a structurally valid
+profile stay in the file. The same applies to the handful of fields that exist to render an
+image, such as resolution and pixel dimensions: their values are whatever the file says they
+are, and keeping them means keeping those values. FilePass tells you a profile was kept; it does
+not promise that nothing can hide inside one.
+
+## What FilePass refuses to spend
+
+Compressed text inside a PNG is unpacked with a ceiling: one megabyte per chunk and eight
+megabytes for a whole file. A file that wants more than that is refused rather than unpacked,
+because text metadata is small in every real image and a small file should not be able to claim
+unbounded memory. That is a limit FilePass sets for itself, not something the PNG format says.
+
 ## Fixtures
 
 `fixtures/` holds committed binaries plus the scripts that generate them (`make.py`,

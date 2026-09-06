@@ -219,6 +219,14 @@
   "verdict": "verified",
   "downloadable": true,
   "findings": [
+   "OTHER/More than one block of camera data",
+   "DEVICE/Camera manufacturer",
+   "DEVICE/Camera model",
+   "DEVICE/Software",
+   "TIME/Modified",
+   "IDENTITY/Author",
+   "TIME/Captured",
+   "LOCATION/GPS location",
    "DEVICE/Camera manufacturer",
    "DEVICE/Camera model",
    "DEVICE/Software",
@@ -230,8 +238,8 @@
   "notes": [
    "Rotation information is kept so the picture still appears the right way up."
   ],
-  "promised": 7,
-  "removed": 7,
+  "promised": 15,
+  "removed": 15,
   "surviving": [],
   "introduced": [],
   "outputBytes": 1077,

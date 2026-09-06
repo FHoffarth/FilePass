@@ -16,4 +16,4 @@ sniff: ZIP (docx/odt): refused (FilePass v0 supports JPEG, PNG and PDF files onl
 size: limit - 1: MalformedFileError - This JPEG file is damaged and cannot be read safely.
 size: limit: MalformedFileError - This JPEG file is damaged and cannot be read safely.
 size: limit + 1: FileTooLargeError - This file is larger than 50 MB. FilePass keeps everything in
-bomb: parsed in 318 ms, finding value length 160, file 41025 bytes
+bomb: refused after 21 ms: The text in this image unpacks to more than FilePass will read, so it will not vouch for it.
