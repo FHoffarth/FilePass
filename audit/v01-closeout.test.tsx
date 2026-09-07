@@ -5,7 +5,7 @@
  * error left focus on a hidden input.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import App from '../src/ui/App';
@@ -58,79 +58,110 @@ describe('A: more than one EXIF block', () => {
 });
 
 describe('B: a second file while the first is still working', () => {
-  /** Inspection that finishes in the order the test chooses, not the order it was called. */
-  const withDelays = async (delays: Record<string, number>) => {
+  /**
+   * Every run the mocked pipeline starts, with a promise that settles when that run has
+   * genuinely finished - returned or thrown. These tests used to assert at a fixed point on
+   * the wall clock instead, which is a guess about how long the work takes: on an idle machine
+   * it left about 400 ms of slack, and a machine under memory pressure can spend that on a
+   * garbage collection pause. Waiting for the work itself is both stabler and stricter, because
+   * a wall-clock wait that expires early does not fail - it quietly stops testing the race.
+   */
+  const tracker = () => {
+    const runs: Promise<unknown>[] = [];
+    return {
+      track: <T,>(work: Promise<T>): Promise<T> => { runs.push(work.catch(() => undefined)); return work; },
+      finished: () => Promise.all(runs),
+    };
+  };
+
+  /**
+   * Inspection that finishes in the order the test chooses, not the order it was called. The
+   * delay can be keyed on the format or on which call it is, and the second matters: a test
+   * where the abandoned run happens to finish first proves nothing, because the newer result
+   * lands last and covers the older one whether or not anything guards against it.
+   */
+  const withDelays = async (delays: Record<string, number> | ((format: string, call: number) => number)) => {
+    const runs = tracker();
+    let calls = 0;
     const real = await vi.importActual<typeof import('../src/core/pipeline')>('../src/core/pipeline');
     vi.doMock('../src/core/pipeline', () => ({
       ...real,
-      inspectFile: async (bytes: Uint8Array) => {
+      inspectFile: (bytes: Uint8Array) => runs.track((async () => {
+        const call = calls++;
         const report = await real.inspectFile(bytes);
-        const wait = delays[report.format] ?? 0;
+        const wait = typeof delays === 'function' ? delays(report.format, call) : delays[report.format] ?? 0;
         if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
         return report;
-      },
+      })()),
     }));
-    return (await import('../src/ui/App')).default;
+    return { App: (await import('../src/ui/App')).default, runs };
   };
 
   it('the slower first file cannot overwrite the newer one', async () => {
-    const Fresh = await withDelays({ jpeg: 500, png: 0 });
+    const { App: Fresh, runs } = await withDelays({ jpeg: 500, png: 0 });
     const user = userEvent.setup();
     render(<Fresh />);
     await user.upload(input(), file('dirty.jpg'));     // slow
     await user.upload(input(), file('dirty.png'));     // fast, and chosen second
-    await new Promise((resolve) => setTimeout(resolve, 900));
+    await runs.finished();                             // including the slow one, which lost
 
-    expect(screen.getByText('dirty.png')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('dirty.png')).toBeInTheDocument());
     expect(document.body.textContent).not.toContain('dirty.jpg');
     expect(screen.getByText('PNG image')).toBeInTheDocument();
   });
 
   it('a reset during processing is not undone when the old run finishes', async () => {
-    const Fresh = await withDelays({ jpeg: 500 });
+    // Both files are JPEGs, so a delay keyed on the format would slow them equally and the
+    // abandoned run would finish first - which is no test at all. The first call is the slow one.
+    const { App: Fresh, runs } = await withDelays((_format, call) => (call === 0 ? 500 : 0));
     const user = userEvent.setup();
     render(<Fresh />);
     await user.upload(input(), file('dirty.jpg'));
-    await user.click(screen.getByRole('button', { name: /drop a file/i }));   // no-op click, still working
-    // reset is only reachable from a result screen, so simulate the user starting over
+    // Starting over is what a user can actually do here: the reset button lives on the result
+    // screen, but the drop zone stays available while a file is being read. A click on it used
+    // to sit here as well - it asserted nothing, opened nothing under jsdom, and was where the
+    // test failed under load, so it is gone rather than made tolerant.
     await user.upload(input(), file('clean.jpg'));
-    await new Promise((resolve) => setTimeout(resolve, 900));
-    expect(screen.getByText('clean.jpg')).toBeInTheDocument();
+    await runs.finished();
+
+    await waitFor(() => expect(screen.getByText('clean.jpg')).toBeInTheDocument());
     expect(document.body.textContent).not.toContain('dirty.jpg');
   });
 
   it('an older run that fails cannot replace the newer result with an error', async () => {
+    const runs = tracker();
     const real = await vi.importActual<typeof import('../src/core/pipeline')>('../src/core/pipeline');
     vi.doMock('../src/core/pipeline', () => ({
       ...real,
-      inspectFile: async (bytes: Uint8Array) => {
+      inspectFile: (bytes: Uint8Array) => runs.track((async () => {
         const report = await real.inspectFile(bytes);
         if (report.format === 'jpeg') {
           await new Promise((resolve) => setTimeout(resolve, 500));
           throw new Error('the older run failed late');
         }
         return report;
-      },
+      })()),
     }));
     const Fresh = (await import('../src/ui/App')).default;
     const user = userEvent.setup();
     render(<Fresh />);
     await user.upload(input(), file('dirty.jpg'));
     await user.upload(input(), file('dirty.png'));
-    await new Promise((resolve) => setTimeout(resolve, 900));
+    await runs.finished();                             // including the one that threw
 
+    await waitFor(() => expect(screen.getByText('dirty.png')).toBeInTheDocument());
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(screen.getByText('dirty.png')).toBeInTheDocument();
   });
 
   it('a file chosen during cleaning wins over the finishing clean', async () => {
+    const runs = tracker();
     const real = await vi.importActual<typeof import('../src/core/pipeline')>('../src/core/pipeline');
     vi.doMock('../src/core/pipeline', () => ({
       ...real,
-      cleanAndVerify: async (bytes: Uint8Array, report: any) => {
+      cleanAndVerify: (bytes: Uint8Array, report: any) => runs.track((async () => {
         await new Promise((resolve) => setTimeout(resolve, 500));
         return real.cleanAndVerify(bytes, report);
-      },
+      })()),
     }));
     const Fresh = (await import('../src/ui/App')).default;
     const user = userEvent.setup();
@@ -138,11 +169,11 @@ describe('B: a second file while the first is still working', () => {
     await user.upload(input(), file('dirty.jpg'));
     await user.click(await screen.findByRole('button', { name: /create clean copy/i }));
     await user.upload(input(), file('dirty.png'));      // arrives while the clean is running
-    await new Promise((resolve) => setTimeout(resolve, 900));
+    await runs.finished();                              // the clean really did finish, and lost
 
+    await waitFor(() => expect(screen.getByText('dirty.png')).toBeInTheDocument());
     expect(document.body.textContent).not.toMatch(/Ready to share/);
     expect(screen.queryByRole('button', { name: /download clean copy/i })).not.toBeInTheDocument();
-    expect(screen.getByText('dirty.png')).toBeInTheDocument();
   });
 });
 
